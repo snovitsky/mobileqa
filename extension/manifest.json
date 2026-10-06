@@ -1,0 +1,29 @@
+{
+  "manifest_version": 3,
+  "name": "Mobile QA Basic — четыре устройства",
+  "version": "2.6.1",
+  "description": "Основная вкладка и 3–5 синхронных мобильных экранов. Без интеграции с аналитикой.",
+  "minimum_chrome_version": "118",
+  "permissions": [
+    "activeTab",
+    "storage",
+    "scripting",
+    "declarativeNetRequestWithHostAccess"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_title": "Открыть синхронные мобильные экраны"
+  },
+  "icons": {
+    "16": "icons/16.png",
+    "48": "icons/48.png",
+    "128": "icons/128.png"
+  },
+  "optional_host_permissions": [
+    "http://*/*",
+    "https://*/*"
+  ]
+}
