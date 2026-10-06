@@ -1,0 +1,19 @@
+{
+  "name": "mobile-qa-basic",
+  "version": "2.6.1",
+  "private": true,
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "check": "node scripts/check.cjs",
+    "test": "npm run check && node tests/integration.cjs && node tests/desktop.cjs",
+    "test:integration": "node tests/integration.cjs",
+    "test:desktop": "node tests/desktop.cjs",
+    "build": "npm run check && node scripts/build.cjs"
+  },
+  "devDependencies": {
+    "fflate": "0.8.3",
+    "playwright": "1.62.1"
+  }
+}
