@@ -1,0 +1,9 @@
+{
+  "schema": 3,
+  "managedBy": "codex-project-docs",
+  "scope": "repository",
+  "docsPath": "codex",
+  "language": "ru",
+  "features": ["frontend", "api", "database", "access", "runbooks", "deploy"],
+  "initialization": {"status": "complete", "completedAt": "2026-10-06"}
+}
