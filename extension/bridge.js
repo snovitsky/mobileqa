@@ -51,7 +51,7 @@
   const a=el.closest('a');if(a&&/^(tel:|mailto:|sms:|javascript:)/i.test(a.getAttribute('href')||''))return;
   send('interaction',{event:{kind:'click',target:describe(el),url:location.href}});
  },true);
- function input(e){if(!e.isTrusted||!readySent)return;const el=e.target;if(!el.matches('input,textarea,select,[contenteditable="true"]'))return;if(el.type==='file')return;
+ function input(e){if(!e.isTrusted||!readySent)return;const el=e.target;if(!el.matches('input,textarea,select,[contenteditable="true"]'))return;if(['file','password'].includes(el.type))return;
   send('interaction',{event:{kind:'input',target:describe(el),value:el.isContentEditable?el.innerText:el.value,checked:el.checked,type:el.type}});
  }
  document.addEventListener('input',input,true);document.addEventListener('change',input,true);
@@ -80,7 +80,7 @@
     const link=el.closest('a[href]');if(link)link.target='_self';
     replaying=true;el.click();replaying=false;
    }else{
-    if(el.type==='file')return;
+    if(['file','password'].includes(el.type))return;
     if(el.isContentEditable)el.innerText=String(ev.value).slice(0,10000);
     else{
      const proto=el instanceof HTMLTextAreaElement?HTMLTextAreaElement.prototype:el instanceof HTMLSelectElement?HTMLSelectElement.prototype:HTMLInputElement.prototype;

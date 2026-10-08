@@ -15,3 +15,9 @@
 - https://www.vedomosti.ru/press_releases/2026/04/23/kazhdii-chetvyortii-rossiyanin-polzuetsya-iphone (пресс-релиз МегаФона)
 - https://mvideoeldorado.ru/ru/press-centr/press-relizy/detail/4204 (М.Видео, 30 апреля 2026)
 - https://www.mvideoeldorado.ru/ru/press-centr/press-relizy/detail/4333 (М.Видео, 9 июля 2026: более свежие данные только по брендам и категориям, без рейтинга моделей)
+
+## Диагонали полного прямоугольника дисплея для физического масштаба
+
+iphone11 — 6.06 in; iphone17/pro — 6.27; iphone17max — 6.86; SE2022 — 4.7; iPad A16 — 10.86; Redmi Note 13 — 6.67; Galaxy A12 — 6.5; Galaxy S24 — 6.2; Pixel7 — 6.3. Полный прямоугольник, углы/камеры уменьшают видимую область. Часть Android-диагоналей округлена производителем.
+
+Источники: https://support.apple.com/en-ie/108044 ; https://support.apple.com/en-us/122240 ; https://www.mi.com/sg/product/redmi-note-13/specs/ ; https://www.samsung.com/ae/smartphones/galaxy-a/galaxy-a12-blue-128gb-sm-a127fzbhmea/ ; https://news.samsung.com/nl/samsung-lanceert-de-gloednieuwe-samsung-galaxy-s24-serie ; https://support.google.com/pixelphone/answer/7158570?hl=en .

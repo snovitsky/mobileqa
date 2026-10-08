@@ -6,4 +6,5 @@ assert.deepEqual(manifest.optional_host_permissions,['http://*/*','https://*/*']
 const files=fs.readdirSync(root);for(const name of files.filter(n=>n.endsWith('.js')))execFileSync(process.execPath,['--check',path.join(root,name)]);
 for(const name of [manifest.background.service_worker,...Object.values(manifest.icons)])assert(fs.existsSync(path.join(root,name)),`Missing ${name}`);
 for(const name of files)assert(!/goal|metrika|conversion|\.env/i.test(name),'Basic must not package analytics data');
+for(const name of files.filter(n=>/\.(js|json|html|css)$/.test(n))){const source=fs.readFileSync(path.join(root,name),'utf8');assert(!/api-metrika|mc\.yandex|reachGoal|\bym\s*\(|DIRECT_API|BrandmakerAnalytics-Service|credentials_file|goal-catalog|goal-overlay/i.test(source),`External analytics integration in ${name}`);}
 console.log('PASS syntax, manifest, version, permissions and Basic package');

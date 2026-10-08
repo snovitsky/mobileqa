@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
-  "name": "Mobile QA Basic — четыре устройства",
-  "version": "2.6.1",
+  "name": "Brandmaker QA",
+  "version": "2.6.3",
   "description": "Основная вкладка и 3–5 синхронных мобильных экранов. Без интеграции с аналитикой.",
   "minimum_chrome_version": "118",
   "permissions": [

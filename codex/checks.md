@@ -52,3 +52,23 @@ Browser smoke не выполнялся: задача ограничена до�
 Прошли check, tests/integration.cjs и tests/desktop.cjs: автономная панель, CSS widths, click/input/Escape/scroll, sync off, переходы и Back, 4→5 экранов, preferences, однократный POST, очередь загрузки, восстановление URL, сохранение введённого адреса, scope/cleanup DNR; источник — click/input/scroll/navigation/reload, target blank, одна отправка, Stop/reconnect/закрытие. Это прогон локальных fixture в установленном Chromium, не подтверждение Safari, реальных устройств, Chrome 118 или всех открытых вопросов.
 
 npm run build прошёл. В ZIP 13 ожидаемых уникальных путей: все байты совпадают с исходниками, CRC проверены, manifest 2.6.1. Валидатор codex завершился с 0 errors/0 warnings, git diff --check прошёл. package.json и package-lock.json установкой не изменены. ZIP и node_modules исключены из коммита через gitignore.
+
+## Диагностика chiedocover.ru 2026-10-08
+
+На macOS в отдельном headless Chromium Playwright с текущим extension 2.6.1 и тестовым доступом только к выбранному домену проверена загрузка четырёх экранов: автономный режим и follow-source. В обоих режимах четыре карточки сообщили «Подключён»; screenshot и DOM подтвердили отображение сайта. Compatibility включён. Клики и отправка форм не выполнялись. HTTP GET вернул 200 без CSP/X-Frame-Options. Сайт загружает сторонние iframe Botfaqtor, включая blocked.botfaqtor.ru; их наличие не доказывает причину белого экрана пользователя. Проблема в пользовательском профиле Chrome не воспроизведена; требуются уточнение области белого экрана и диагностика установленной копии. Полный npm test в рамках этой диагностики не запускался.
+
+## Проверка Brandmaker QA 2.6.2 на macOS
+
+npm test и npm run build прошли после переименования и переноса контролов в header. В отдельном Chromium проверены 1600/1024/390 px: URL остаётся в header, горизонтального переполнения controls нет. Screenshot 1600 px проверен визуально; header 128 px на 1600/1024, 241 px на 390. Manifest permissions не менялись. Результаты относятся к локальному Chromium; CI ещё не запускался.
+
+После выбранного оформления 07 полный npm test прошёл с декоративными рамками: реальные CSS widths iframe остались 414/393/360/820; синхронизация и очистка DNR прошли. После перемещения status внутри settings визуально проверены ширины 1600/1024/390: controls не переполняют header, высота 115/145/251 px. Декоративные детали не перекрывают iframe.
+
+## Калибровка и меню 2.6.3
+
+node tests/physical-size.cjs прошёл на macOS/Chromium: требование калибровки и cancel, контрольная полоска 250 CSS px при условных 5px/mm, диагональ экрана iPhone 11 6.06×25.4×5 px (допуск <1px), rotation, 50%, persistence, CSS 1:1 и отклонение нулевого ввода. Физическое совпадение на пользовательском мониторе требует его ручной калибровки; тест проверяет геометрию и сохранение, не измеряет монитор линейкой. Полный npm test выполняется дополнительно перед выпуском.
+
+Финальный прогон 2.6.3: check, integration и desktop прошли. Первый physical тест обнаружил отсутствие ожидания асинхронного close dialog в тесте; добавлен waitForFunction для завершения отмены. Повторный npm run test:physical прошёл, npm run build и git diff --check прошли. Полный npm test после исправления только тестового ожидания повторно не запускался.
+
+## Полный финальный прогон перед коммитом
+
+npm test полностью прошёл после исправления вырезов и двустороннего транспорта: check, integration, desktop с обратным phone/tablet управлением и выключением routes, physical-size с диагональю .display и проверкой status+site=display. npm run build и git diff --check прошли. Preview 1600: header 54px, элементы не переполняют строку; 1024/390: intentional horizontal scrolling, header 54/52px.

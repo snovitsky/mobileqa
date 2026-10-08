@@ -61,8 +61,37 @@
   cancelAnimationFrame(scrollFrame);scrollFrame=requestAnimationFrame(()=>send('interaction',{event:{kind:'scroll',target:describe(el),x:el.scrollLeft/Math.max(1,el.scrollWidth-el.clientWidth),y:el.scrollTop/Math.max(1,el.scrollHeight-el.clientHeight)}}));
  },true);
 
+
+ let replaying=false;
+ document.addEventListener('submit',e=>{if(replaying||Date.now()<mutedUntil){e.preventDefault();e.stopImmediatePropagation();}},true);
+ function apply(event){
+const ev=event;if(!ev||!['scroll','click','input','key'].includes(ev.kind))return;
+  if(ev.url&&ev.url.split('#')[0]!==location.href.split('#')[0]){send('missing',{eventId:ev.seq,message:'На экранах открыты разные адреса. Нажмите «Показать» для выравнивания.'});return;}
+  if(ev.kind==='key'){if(ev.key==='Escape'){document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',code:'Escape',keyCode:27,which:27,bubbles:true}));document.dispatchEvent(new KeyboardEvent('keyup',{key:'Escape',code:'Escape',keyCode:27,which:27,bubbles:true}));}return;}
+  const el=find(ev.target||{});if(!el){send('missing',{eventId:ev.seq,message:'Элемент не найден в этой версии страницы.'});return;}
+  mutedUntil=Date.now()+400;
+  try{
+   if(ev.kind==='scroll'){
+    el.scrollTo({left:Math.max(0,Math.min(1,Number(ev.x)||0))*Math.max(0,el.scrollWidth-el.clientWidth),top:Math.max(0,Math.min(1,Number(ev.y)||0))*Math.max(0,el.scrollHeight-el.clientHeight),behavior:'instant'});
+   }else if(ev.kind==='click'){
+    if(canSubmit(el))return;
+    const link=el.closest('a[href]');if(link?.target==='_blank')return;
+    replaying=true;el.click();replaying=false;
+   }else{
+    if(['file','password'].includes(el.type))return;
+    if(el.isContentEditable)el.innerText=String(ev.value).slice(0,10000);
+    else{
+     const proto=el instanceof HTMLTextAreaElement?HTMLTextAreaElement.prototype:el instanceof HTMLSelectElement?HTMLSelectElement.prototype:HTMLInputElement.prototype;
+     const setter=Object.getOwnPropertyDescriptor(proto,'value')?.set;if(setter)setter.call(el,String(ev.value).slice(0,10000));
+     if(['checkbox','radio'].includes(el.type)){Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'checked').set.call(el,!!ev.checked);}
+    }
+    replaying=true;el.dispatchEvent(new Event('input',{bubbles:true}));el.dispatchEvent(new Event('change',{bubbles:true}));replaying=false;
+   }
+  send('sync-ack',{eventId:ev.seq,kind:ev.kind});
+  }catch{replaying=false;send('missing',{eventId:ev.seq,message:'Этот элемент не поддерживает синхронизацию.'});}
+ }
  function announce(){send('ready',{url:location.href});const el=document.scrollingElement;send('interaction',{event:{kind:'scroll',target:{selector:':root'},x:el.scrollLeft/Math.max(1,el.scrollWidth-el.clientWidth),y:el.scrollTop/Math.max(1,el.scrollHeight-el.clientHeight)}});}
- chrome.runtime.onMessage.addListener(msg=>{if(msg.type==='source-stop'){readySent=false;token='';}if(msg.type==='source-config'){token=msg.token;readySent=true;announce();}});
+ chrome.runtime.onMessage.addListener((msg,sender)=>{if(sender.id!==chrome.runtime.id)return;if(msg.type==='source-apply'&&readySent&&msg.token===token){apply(msg.event);return;}if(msg.type==='source-stop'){readySent=false;token='';}if(msg.type==='source-config'){token=msg.token;readySent=true;announce();}});
  chrome.runtime.sendMessage({type:'source-hello'}).then(r=>{if(r?.enabled){token=r.token;readySent=true;announce();}}).catch(()=>{});
  window.addEventListener('beforeunload',()=>send('loading'));
  let lastURL=location.href;setInterval(()=>{if(readySent&&lastURL!==location.href){lastURL=location.href;send('route',{url:lastURL});}},250);

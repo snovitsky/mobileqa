@@ -4,11 +4,11 @@
 
 Node.js 22+, `npm ci`, затем `npx playwright install chromium` (Linux: при необходимости `--with-deps`). Это инструкции проекта, не перечень выполненных при обновлении документации действий. Runtime расширения не зависит от npm; devDependencies — Playwright 1.62.1 и fflate 0.8.3.
 
-Перед push: `npm test` и `npm run build`. Build сначала запускает check, затем scripts/build.cjs через fflate формирует `dist/mobile-qa-basic-2.6.1.zip`. В ZIP 13 явно разрешённых файлов: 11 файлов приложения в extension/ (пять JS, panel.html/css, manifest и три иконки) и codex/user-guide.md, codex/device-sources.md. Справочники берутся из единственного исходного места codex/; остальные внутренние документы, AGENTS, tests, node_modules и рабочие файлы не упаковываются. Timestamps ZIP фиксированы датой 2020-01-01; это артефакт поставки, а не резервная копия.
+Перед push: `npm test` и `npm run build`. Build сначала запускает check, затем scripts/build.cjs через fflate формирует `dist/brandmaker-qa-2.6.3.zip`. В ZIP 13 явно разрешённых файлов: 11 файлов приложения в extension/ (пять JS, panel.html/css, manifest и три иконки) и codex/user-guide.md, codex/device-sources.md. Справочники берутся из единственного исходного места codex/; остальные внутренние документы, AGENTS, tests, node_modules и рабочие файлы не упаковываются. Timestamps ZIP фиксированы датой 2020-01-01; это артефакт поставки, а не резервная копия.
 
 ## GitHub Actions
 
-`.github/workflows/ci.yml`: push в main и pull_request; job checks, ubuntu-latest, Node 22, timeout 15 минут, contents read. Порядок: checkout → setup-node/npm cache → npm ci → playwright install --with-deps chromium → npm test → npm run build → upload artifact. Artifact называется mobile-qa-basic-<SHA>, содержит dist/*.zip; отсутствие ZIP завершает upload ошибкой. Concurrency по ref отменяет предыдущий незавершённый run.
+`.github/workflows/ci.yml`: push в main и pull_request; job checks, ubuntu-latest, Node 22, timeout 15 минут, contents read. Порядок: checkout → setup-node/npm cache → npm ci → playwright install --with-deps chromium → npm test → npm run build → upload artifact. Artifact называется brandmaker-qa-<SHA>, содержит dist/*.zip; отсутствие ZIP завершает upload ошибкой. Concurrency по ref отменяет предыдущий незавершённый run.
 
 Workflow реагирует на PR, но не требует создавать PR. По зафиксированным правилам workflow main допускает прямой push, обязательные PR/review/checks отключены владельцем. Это зафиксированное соглашение; настройки GitHub и результаты конкретных Actions runs отдельно не проверялись. Локальные проверки остаются обязательными перед отправкой.
 
