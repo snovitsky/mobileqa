@@ -72,3 +72,9 @@ node tests/physical-size.cjs прошёл на macOS/Chromium: требован�
 ## Полный финальный прогон перед коммитом
 
 npm test полностью прошёл после исправления вырезов и двустороннего транспорта: check, integration, desktop с обратным phone/tablet управлением и выключением routes, physical-size с диагональю .display и проверкой status+site=display. npm run build и git diff --check прошли. Preview 1600: header 54px, элементы не переполняют строку; 1024/390: intentional horizontal scrolling, header 54/52px.
+
+## Проверки ошибок страницы
+
+`node tests/inspection.cjs`: локальный ответ 404, опция по умолчанию off, сохранение и отключение, отсутствие повторного HTTP-запроса при определении статуса, overflow/маленькая кнопка/мелкий текст, QR canvas. Запускается в npm test. Проверка не обращается к клиентским сайтам.
+
+Physical-size тест дополнен проверками суммы всех частей дисплея, expanded/collapsed/none и неизменности физической диагонали при переключении.

@@ -65,6 +65,18 @@
  document.addEventListener('submit',e=>{if(replaying||Date.now()<mutedUntil){e.preventDefault();e.stopImmediatePropagation();}},true);
  window.addEventListener('message',e=>{
   if(e.source!==window.parent||e.origin!==parentOrigin||e.data?.app!==prefix||e.data.token!==token||!readySent)return;
+  if(e.data.type==='inspect-page'){
+   const findings=[];const add=(kind,el,message)=>{if(findings.length<80)findings.push({kind,selector:describe(el).selector,message});};
+   const root=document.documentElement;
+   if(root.scrollWidth>innerWidth+2)add('overflow',root,`Страница шире экрана на ${root.scrollWidth-innerWidth} px`);
+   let visited=0;for(const el of document.querySelectorAll('body *')){if(++visited>10000)break;const r=el.getBoundingClientRect(),style=getComputedStyle(el);if(!r.width||!r.height||style.visibility==='hidden'||style.display==='none'||el.closest('[aria-hidden="true"]'))continue;
+    if(r.right>innerWidth+2&&r.left>=0&&style.position!=='fixed')add('overflow',el,'Элемент выходит за правый край');
+    if(el.matches('button,a[href],input:not([type=hidden]),select,textarea,[role=button]')&&(r.width<24||r.height<24))add('target',el,`Маленькая область нажатия: ${Math.round(r.width)} × ${Math.round(r.height)} px`);
+    if([...el.childNodes].some(n=>n.nodeType===3&&n.textContent.trim())&&parseFloat(style.fontSize)<12)add('text',el,`Мелкий текст: ${style.fontSize}`);
+   }
+   send('page-findings',{url:location.href,findings,truncated:visited>10000||findings.length>=80});return;
+  }
+  if(e.data.type==='http-status'){const nav=performance.getEntriesByType('navigation')[0];send('http-status',{url:location.href,status:nav?.name===location.href.split('#')[0]?Number(nav.responseStatus)||0:0});return;}
   if(e.data.type==='snapshot'){send('view-state',{state:{url:location.href,modal:!!document.querySelector('.fancybox-is-open,.fancybox__container,.lg-visible,dialog[open]')}});return;}
   if(e.data.type==='ping'){send('ready',{url:location.href});return;}
   if(e.data.type!=='apply')return;const ev=e.data.event;if(!ev||!['scroll','click','input','key'].includes(ev.kind))return;
