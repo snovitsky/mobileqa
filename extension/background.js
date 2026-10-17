@@ -24,9 +24,9 @@ async function prepare(tabId,url,compatibility,sourceTabId,syncEnabled=true){
  }
  const scripts=await chrome.scripting.getRegisteredContentScripts();
  const registered=scripts.find(s=>s.matches?.includes(match));
- if(registered){await chrome.scripting.updateContentScripts([{id:registered.id,js:['bridge.js']}]);}else{
+ if(registered){await chrome.scripting.updateContentScripts([{id:registered.id,js:['bridge.js','desktop-source.js']}]);}else{
   const id='mobile-bridge-'+Date.now()+'-'+Math.floor(Math.random()*1e6);
-  await chrome.scripting.registerContentScripts([{id,matches:[match],js:['bridge.js'],allFrames:true,runAt:'document_start',persistAcrossSessions:false}]);
+  await chrome.scripting.registerContentScripts([{id,matches:[match],js:['bridge.js','desktop-source.js'],allFrames:true,runAt:'document_start',persistAcrossSessions:false}]);
  }
  const token=crypto.randomUUID();sessions.set(tabId,{host,token,sourceTabId,syncEnabled});await persist();if(sourceTabId){try{await chrome.scripting.executeScript({target:{tabId:sourceTabId,frameIds:[0]},files:['desktop-source.js']});await chrome.tabs.sendMessage(sourceTabId,{type:'source-config',token});}catch(e){await cleanup(tabId);throw e;}}return {token,sourceURL};
 }

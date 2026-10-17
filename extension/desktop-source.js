@@ -90,7 +90,7 @@ const ev=event;if(!ev||!['scroll','click','input','key'].includes(ev.kind))retur
   send('sync-ack',{eventId:ev.seq,kind:ev.kind});
   }catch{replaying=false;send('missing',{eventId:ev.seq,message:'Этот элемент не поддерживает синхронизацию.'});}
  }
- function announce(){send('ready',{url:location.href});const el=document.scrollingElement;send('interaction',{event:{kind:'scroll',target:{selector:':root'},x:el.scrollLeft/Math.max(1,el.scrollWidth-el.clientWidth),y:el.scrollTop/Math.max(1,el.scrollHeight-el.clientHeight)}});}
+ function announce(){send('ready',{url:location.href});const el=document.scrollingElement;if(!el)return;send('interaction',{event:{kind:'scroll',target:{selector:':root'},x:el.scrollLeft/Math.max(1,el.scrollWidth-el.clientWidth),y:el.scrollTop/Math.max(1,el.scrollHeight-el.clientHeight)}});}
  chrome.runtime.onMessage.addListener((msg,sender)=>{if(sender.id!==chrome.runtime.id)return;if(msg.type==='source-apply'&&readySent&&msg.token===token){apply(msg.event);return;}if(msg.type==='source-stop'){readySent=false;token='';}if(msg.type==='source-config'){token=msg.token;readySent=true;announce();}});
  chrome.runtime.sendMessage({type:'source-hello'}).then(r=>{if(r?.enabled){token=r.token;readySent=true;announce();}}).catch(()=>{});
  window.addEventListener('beforeunload',()=>send('loading'));

@@ -95,10 +95,10 @@ chrome.runtime.onMessage.addListener((msg,sender)=>{
  if(msg.eventType==='closed'){running=false;$('follow-source').checked=false;status('Основная вкладка закрыта. Нажмите «Показать» для самостоятельной работы с панелью.',true);return;}
  if(msg.eventType==='domain-change'){status('Основная вкладка перешла на другой домен. Укажите её адрес и нажмите «Показать», чтобы разрешить доступ.',true);return;}
  if(['ready','route'].includes(msg.eventType)){
-  let url;try{url=normalizeURL(data.url);}catch{return;}desktopURL=url;if(!$('sync').checked||leader)return;if(!addressDirty){$('url').value=url;history.replaceState(null,'','?url='+encodeURIComponent(url)+'&source='+sourceTabId);}
+  let url;try{url=normalizeURL(data.url);}catch{return;}desktopURL=url;$('source-status').dataset.url=url;$('source-status').textContent='Основная вкладка подключена';if(!$('sync').checked||leader)return;if(!addressDirty){$('url').value=url;history.replaceState(null,'','?url='+encodeURIComponent(url)+'&source='+sourceTabId);}
   leader=null;if($('sync').checked)cards.forEach(c=>{if(c.pageurl.textContent!==url)setURL(c,url);});$('source-status').textContent='Основная вкладка подключена';return;
  }
- if(msg.eventType==='loading'){$('source-status').textContent='Основная вкладка загружает страницу…';return;}
+ if(msg.eventType==='loading'){delete $('source-status').dataset.url;$('source-status').textContent='Основная вкладка загружает страницу…';return;}
  if(msg.eventType==='blocked'){status(data.message);return;}
  if(msg.eventType==='interaction'&&$('sync').checked){const event=data.event;if(!['scroll','click','input','key'].includes(event?.kind))return;if(event.kind==='scroll'&&leader)return;event.seq=++sequence;leader=null;lastAction=Date.now();trace('desktop-interaction',null,{kind:event.kind,selector:event.target?.selector,sequence:event.seq});cards.forEach(c=>relay(c,event));}
 });

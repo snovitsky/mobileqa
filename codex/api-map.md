@@ -44,3 +44,7 @@ Desktop поддерживает семантический replay click/input/s
 ## Проверка страницы 2.6.4
 
 Panel → bridge: http-status, inspect-page (по существующему защищённому каналу). Bridge → panel: http-status {url,status}, page-findings {url,findings:[{kind,selector,message}],truncated}. Результаты принимаются только от текущего iframe с token и совпадающим текущим URL. HTTP-статус берётся из PerformanceNavigationTiming.responseStatus, 0 означает недоступность; SPA не наследует статус предыдущего документа. Проверка DOM не нажимает элементы и не отправляет формы.
+
+## Подключение после навигации 2.6.9
+
+Регистрация content scripts на выбранном host включает bridge.js и desktop-source.js с document_start. Desktop-source выходит в iframe и проверяет source-hello у background; handshake не меняет проверок sender/tab/frame/host/token. В обычной неподключённой вкладке скрипт не отправляет события. Панель записывает URL подключения источника в source-status.dataset.url на ready/route и сбрасывает при loading, независимо от leader. Поздний executeScript остаётся запасным путём, а не единственным подключением нового документа.
