@@ -1,4 +1,5 @@
 const {chromium}=require('playwright');
+const {expect}=require('playwright/test');
 const fs=require('fs'),path=require('path'),os=require('os'),http=require('http'),assert=require('assert');
 const fixture=`<meta name="viewport" content="width=device-width,initial-scale=1"><style>body{font:20px system-ui}button,input,a{display:block;margin:20px;padding:10px}.tail{height:2500px}</style><button id="menu" onclick="document.querySelector('#result').textContent='Открыто'">Меню</button><p id="result">Закрыто</p><input id="field"><input id="password" type="password"><div id="box" style="height:100px;overflow:auto"><div style="height:900px">Вложенная прокрутка</div></div><a id="next" href="/next">Дальше</a><a id="blank" href="/new" target="_blank">Новое окно</a><form action="/post" method="POST"><button type="submit" id="submit">Заявка</button></form><div class="tail"></div>`;
 (async()=>{let posts=0;const server=http.createServer((req,res)=>{if(req.method==='POST')posts++;res.writeHead(200,{'Content-Type':'text/html; charset=utf-8'});res.end(fixture);}).listen(0,'127.0.0.1');await new Promise(r=>server.once('listening',r));const site='http://127.0.0.1:'+server.address().port,root=fs.mkdtempSync(path.join(os.tmpdir(),'mobile-qa-desktop-')),ext=path.join(root,'extension');fs.cpSync(path.resolve(__dirname,'../extension'),ext,{recursive:true});const manifest=JSON.parse(fs.readFileSync(path.join(ext,'manifest.json')));manifest.host_permissions=['http://127.0.0.1/*'];fs.writeFileSync(path.join(ext,'manifest.json'),JSON.stringify(manifest));let context;
@@ -129,7 +130,16 @@ await worker.evaluate(()=>{globalThis.originalDesktopInjection=chrome.scripting.
 await frames[0].locator('#next').evaluate(e=>e.scrollIntoView({block:'center'}));await panel.waitForTimeout(500);const navOuter=await (await frames[0].frameElement()).boundingBox();const navInner=await frames[0].locator('#next').evaluate(e=>{const r=e.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2,w:innerWidth};});
 try{await panel.mouse.click(navOuter.x+navInner.x*navOuter.width/navInner.w,navOuter.y+navInner.y*navOuter.width/navInner.w);await source.waitForURL('**/next');await panel.waitForFunction(()=>[...document.querySelectorAll('.pageurl')].every(e=>e.textContent.endsWith('/next')));await panel.waitForFunction(()=>[...document.querySelectorAll('.device-status')].every(x=>x.textContent==='Подключён'));}
 catch(error){await navigationCheckpoint('MOBILE NAVIGATION FAILURE');throw error;}
-await source.waitForLoadState('load');await panel.waitForFunction(url=>document.querySelector('#source-status').dataset.url===url,site+'/next',{timeout:10000});await source.bringToFront();await source.locator('#field').fill('Основная снова');await panel.waitForFunction(()=>document.querySelector('#status').textContent.length>0);frames=panel.frames().filter(f=>f.url().startsWith(site));await Promise.all(frames.map(f=>f.waitForFunction(()=>document.querySelector('#field').value==='Основная снова')));
+await source.waitForLoadState('load');
+await panel.waitForFunction(url=>document.querySelector('#source-status').dataset.url===url,site+'/next',{timeout:10000});
+await source.bringToFront();await source.locator('#field').fill('Основная снова');
+try{
+ // При завершении перехода iframe может замениться: локатор разрешается заново при каждой проверке.
+ // Ввод выполняется один раз; значение обязано появиться во всех актуальных четырёх экранах.
+ await expect(panel.locator('.screen iframe')).toHaveCount(4);
+ await Promise.all([0,1,2,3].map(index=>expect(panel.frameLocator('.screen iframe').nth(index).locator('#field')).toHaveValue('Основная снова',{timeout:10000})));
+}catch(error){await navigationCheckpoint('SOURCE INPUT AFTER MOBILE NAVIGATION FAILURE');throw error;}
+frames=panel.frames().filter(f=>f.url().startsWith(site));
 await worker.evaluate(()=>{chrome.scripting.executeScript=globalThis.originalDesktopInjection;delete globalThis.originalDesktopInjection;});
 console.log('PASS automatic reconnect without late injection; reverse phone/tablet input, nested scroll, password exclusion, bidirectional action pause with continued source URL following, mobile navigation and desktop takeover');
 await source.locator('#next').click();await panel.waitForFunction(()=>[...document.querySelectorAll('.pageurl')].every(e=>e.textContent.endsWith('/next')));await panel.waitForFunction(()=>[...document.querySelectorAll('.device-status')].every(x=>x.textContent==='Подключён'));
