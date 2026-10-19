@@ -21,5 +21,8 @@ export function normalizeURL(value) {
  let url;try{url=new URL(hasScheme?raw:'https://'+raw);}catch{throw userError('inputInvalid');}
  if(!['http:','https:'].includes(url.protocol))throw userError('inputUnsupported');
  if(url.username||url.password)throw userError('inputCredentials');
+ const host=url.hostname.replace(/\.$/,'');
+ const local=host==='localhost'||host.endsWith('.localhost')||host.startsWith('[');
+ if(!local&&(!host.includes('.')||host.length>253||host.split('.').some(label=>!label||label.length>63||!/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/i.test(label))))throw userError('inputInvalid');
  return url.href;
 }

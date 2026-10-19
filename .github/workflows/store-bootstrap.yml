@@ -1,0 +1,80 @@
+name: Record first Chrome Web Store publication
+on:
+  workflow_dispatch:
+    inputs:
+      successful_ci_run_id:
+        description: CI run ID whose exact store ZIP was manually published for the first time
+        required: true
+        type: string
+      confirmed_exact_package:
+        description: I verified the published version and uploaded this exact CI ZIP
+        required: true
+        default: false
+        type: boolean
+permissions:
+  contents: read
+concurrency:
+  group: chrome-web-store-production
+  cancel-in-progress: false
+jobs:
+  bootstrap:
+    if: github.ref == 'refs/heads/main' && inputs.confirmed_exact_package == true
+    environment: chrome-web-store
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      actions: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: main
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: '22'
+      - id: source
+        name: Verify the operator-selected successful CI run
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CWS_BOOTSTRAP_CONFIRMED: ${{ inputs.confirmed_exact_package }}
+          CWS_CI_RUN_ID: ${{ inputs.successful_ci_run_id }}
+        run: node scripts/store-bootstrap-check.cjs
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ steps.source.outputs.source_sha }}
+          persist-credentials: false
+      - run: npm ci --ignore-scripts
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: brandmaker-qa-store-${{ steps.source.outputs.source_sha }}
+          path: dist
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ inputs.successful_ci_run_id }}
+      - name: Verify configuration and exact package
+        env:
+          CWS_PUBLISHER_ID: ${{ vars.CWS_PUBLISHER_ID }}
+          CWS_ITEM_ID: ${{ vars.CWS_ITEM_ID }}
+          GCP_WORKLOAD_IDENTITY_PROVIDER: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          GCP_SERVICE_ACCOUNT: ${{ vars.GCP_SERVICE_ACCOUNT }}
+          EXPECTED_SOURCE_SHA: ${{ steps.source.outputs.source_sha }}
+        run: node scripts/store-workflow-check.cjs
+      - id: google
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+          token_format: access_token
+          access_token_scopes: https://www.googleapis.com/auth/chromewebstore.readonly
+          create_credentials_file: false
+          export_environment_variables: false
+      - name: Record the verified first publication without uploading to Store
+        env:
+          CWS_ACCESS_TOKEN: ${{ steps.google.outputs.access_token }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CWS_PUBLISHER_ID: ${{ vars.CWS_PUBLISHER_ID }}
+          CWS_ITEM_ID: ${{ vars.CWS_ITEM_ID }}
+          CWS_SOURCE_SHA: ${{ steps.source.outputs.source_sha }}
+          CWS_BOOTSTRAP_CONFIRMED: ${{ inputs.confirmed_exact_package }}
+        run: node scripts/store-publish.cjs bootstrap

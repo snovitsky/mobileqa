@@ -51,3 +51,12 @@ URL не очищаются от query/hash и могут быть чувств�
 ## Очередь текущего источника 2.6.18
 
 pendingSourceEvents в памяти панели: до 80 {token,sourceTabId,event}, без storage/export. Содержит те же поддерживаемые события, что обычные pending карточек; обычные значения input существуют лишь до применения/отмены. В trace попадают kind/selector/sequence без value. Password/file не захватываются. Выпуск только после готовности текущего источника и повторной проверки token/URL; отмена описана в api-map.
+
+## Локальная подготовка 2.6.20
+
+storage.local.extensionUpdate={version,previousVersion} записывается background при onInstalled reason=update для новой версии. seenReleaseVersion хранит подтверждённую пользователем версию уведомления. История release-notes.json упакована локально; чтение не обращается к серверу. Подсказки сайтов строятся в памяти по permissions.getAll, отдельная история URL/текстов ввода не сохраняется. Production-история между опубликованными выпусками и provenance описаны как будущая схема в store-release-plan.md.
+
+
+## Автоматизация магазина — локальная подготовка 2026-10-19
+
+Добавлены storage.local.pendingExtensionUpdate={version} и dismissedPendingUpdate=version. Они очищаются при onInstalled update. Значения форм для обновления не сохраняются; preferences записываются последовательно и подтверждаются каждой панелью перед reload. Релизные source SHA/digest/baseversion хранятся в CI artifact/release provenance вне extension ZIP.

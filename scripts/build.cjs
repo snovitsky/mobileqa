@@ -1,6 +1,12 @@
 const fs=require('node:fs'),path=require('node:path'),{zipSync}=require('fflate');
-const root=path.resolve(__dirname,'..'),version=JSON.parse(fs.readFileSync(path.join(root,'extension/manifest.json'))).version;
-const allowed=['extension/background.js','extension/bridge.js','extension/desktop-source.js','extension/devices.js','extension/responsive.js','extension/access-settings.js','extension/url-display.js','extension/errors.js','extension/error-notice.js','extension/qr.js','extension/panel.js','extension/panel.html','extension/panel.css','extension/manifest.json','extension/icons/16.png','extension/icons/48.png','extension/icons/128.png','codex/user-guide.md','codex/device-sources.md'];
-allowed.push('extension/inspection-report.js');
-const entries={};for(const name of allowed)entries[name]=[fs.readFileSync(path.join(root,name)),{mtime:new Date('2020-01-01T00:00:00Z')}];
-const out=path.resolve(__dirname,'../dist');fs.mkdirSync(out,{recursive:true});const target=path.join(out,`brandmaker-qa-${version}.zip`);fs.writeFileSync(target,zipSync(entries,{level:9}));console.log(target);
+const {runtimeFiles}=require('./release-files.cjs');
+const root=path.resolve(__dirname,'..'),version=require('../extension/manifest.json').version;
+const store=process.argv.includes('--store');
+const files=runtimeFiles.map(name=>({source:'extension/'+name,target:store?name:'extension/'+name}));
+if(!store)for(const name of ['user-guide.md','device-sources.md'])files.push({source:'codex/'+name,target:'codex/'+name});
+const entries={};
+for(const file of files)entries[file.target]=[fs.readFileSync(path.join(root,file.source)),{mtime:new Date('2020-01-01T00:00:00Z')}];
+const out=path.join(root,'dist');fs.mkdirSync(out,{recursive:true});
+const target=path.join(out,`brandmaker-qa-${version}${store?'-store':''}.zip`);
+fs.writeFileSync(target,zipSync(entries,{level:9}));console.log(target);
+if(store)require('./store-audit.cjs').auditPackage(target);

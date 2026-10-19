@@ -1,3 +1,5 @@
+import { setupReleaseNotice } from './release-notice.js';
+import { setupSiteSuggestions } from './site-suggestions.js';
 import { userError, userMessage, httpStatusMessage } from './errors.js';
 import { qrcodegen } from './qr.js';
 import { DEVICES, normalizeURL } from './devices.js';
@@ -17,8 +19,10 @@ let processingSourceKey = '';
 let sourceRecoveryTimer = null;
 let operationRevision = 0, pendingStandalone = false, forceSourceRefresh = false;
 let stoppedByUser = false;
+let updatingExtension = false, preferenceWrites = Promise.resolve();
 let criticalIssue = false;
 const $=id=>document.getElementById(id);
+setupSiteSuggestions($('url'),$('allowed-site-suggestions'));
 const errorNotice=createErrorNotice({container:$('error-notice'),text:$('sync-feedback'),meta:$('error-notice-meta'),dismiss:$('error-dismiss'),onDismiss:()=>status('Сообщение скрыто. При новом сбое оно появится снова.')});
 const following=()=>$('follow-source').checked;let cards=[],token='',running=false,busy=false,leader=null;
 let calibration=null,lastScale='auto',pendingPhysicalScale=null;
@@ -197,7 +201,7 @@ new ResizeObserver(entries => {
  if (cards.length) resize();
 }).observe($('devices'));
 
-function post(c,type,extra={}){if(c.frame.contentWindow)c.frame.contentWindow.postMessage({app:'mobile-qa-v2',token,type,...extra},'*');}
+function post(c,type,extra={}){if(preparedOrigin&&c.frame.contentWindow)c.frame.contentWindow.postMessage({app:'mobile-qa-v2',token,type,...extra},preparedOrigin);}
 function relay(c,event){
  if(!c.ready){c.pending??=[];if(event.kind==='scroll')c.pending=c.pending.filter(x=>x.kind!=='scroll'||x.target.selector!==event.target.selector);if(c.pending.length<80)c.pending.push(event);return;}
  post(c,'apply',{event});
@@ -267,7 +271,7 @@ function build(){
  resize();
 }
 window.addEventListener('message',e=>{
- if(!running||e.data?.app!=='mobile-qa-v2'||e.data.token!==token)return;
+ if(!running||e.origin!==preparedOrigin||e.data?.app!=='mobile-qa-v2'||e.data.token!==token)return;
  const c=cards.find(c=>c.frame.contentWindow===e.source);if(!c)return;
  if(e.data.type==='http-status'){if(!$('check-404').checked||e.data.url!==c.pageurl.textContent)return;const el=c.article.querySelector('.http-warning');el.hidden=false;el.textContent=httpStatusMessage(e.data.status);el.classList.toggle('not-found',e.data.status===404);return;}
  if(e.data.type==='page-findings'){if(e.data.url!==c.pageurl.textContent||e.data.viewport?.width!==parseInt(c.frame.style.width)||e.data.viewport?.height!==parseInt(c.frame.style.height))return;renderInspectionReport(c,e.data,data=>post(c,'show-finding',data));return;}
@@ -282,8 +286,20 @@ window.addEventListener('message',e=>{
  if(e.data.type==='blocked'){c.intentional=true;trace('blocked',c,{message:e.data.message});c.state.textContent=e.data.message;status(e.data.message);return;}
  if(e.data.type==='missing'){trace(e.data.type,c,{reason:e.data.reason,kind:e.data.kind,sequence:e.data.eventId});c.state.textContent='Действие не повторилось';status(missingMessage('На экране «'+c.select.selectedOptions[0].textContent+'»',e.data),true,'warning');}
 });
-chrome.runtime.onMessage.addListener((msg,sender)=>{
+chrome.runtime.onMessage.addListener((msg,sender,reply)=>{
  if(sender.id!==chrome.runtime.id||msg.panelTabId!==panelTabId)return;
+ if(msg.type==='extension-update-stop'){
+  updatingExtension=true;operationRevision++;sourceRevision++;
+  savePreferences().then(saved=>{
+   if(!saved){updatingExtension=false;reply({ok:false,panelTabId});return;}
+   cards.forEach(c=>post(c,'cancel-pointer'));
+   stoppedByUser=true;pendingCandidate=null;pendingStandalone=false;forceSourceRefresh=false;
+   clearTimeout(sourceRecoveryTimer);watchingSource=false;sourceConnected=false;running=false;token='';sessionSourceId=null;leader=null;pendingSourceEvents=[];
+   cards.forEach(c=>{clearTimeout(c.inspectionTimer);blank(c);c.pending=[];c.placeholder.hidden=false;c.placeholder.textContent='QA-сеанс завершён для обновления';c.state.textContent='Остановлен';});
+   updateSessionControls();reply({ok:true,panelTabId});
+  }).catch(()=>{updatingExtension=false;reply({ok:false,panelTabId});});return true;
+ }
+ if(msg.type==='extension-update-failed'){updatingExtension=false;return;}
  if(msg.type==='access-revoked'){
   siteAccess.refresh();
   if(!msg.sessionRevoked)return;
@@ -364,6 +380,7 @@ async function refreshSource(){
  if(revision===sourceRevision)queueSource(candidate);
 }
 function queueSource(candidate){
+ if(updatingExtension)return;
  if(!following()||!watchingSource)return;
  if(candidate.state!=='ready'||candidate.sourceTabId!==sessionSourceId||(candidate.sourceURL&&new URL(candidate.sourceURL).origin!==preparedOrigin))sourceConnected=false;
  const key=sourceKey(candidate);
@@ -390,7 +407,7 @@ async function connectScreens(url,candidate=null,revision=sourceRevision){
  status('Загружаем '+cards.length+' экранов…');
 }
 async function drainSource(){
- if(busy||processingCandidate)return;
+ if(busy||processingCandidate||updatingExtension)return;
  processingCandidate=true;
  updateSessionControls();
  try{
@@ -420,6 +437,7 @@ async function drainSource(){
  }finally{processingCandidate=false;processingSourceKey='';updateSessionControls();if(pendingStandalone)resumeWork().catch(error=>reportError(error,'startFailed'));}
 }
 async function resumeWork(){
+ if(updatingExtension)return;
  if(busy||processingCandidate)return;
  if(pendingStandalone&&!following()){
   pendingStandalone=false;busy=true;
@@ -432,6 +450,7 @@ async function resumeWork(){
  await drainSource();
 }
 async function watchSource(){
+ if(updatingExtension)return;
  watchingSource=true;stoppedByUser=false;
  const candidate=await send('watch-source',{enabled:true,sourceTabId,sourceWindowId});
  queueSource(candidate);
@@ -473,12 +492,15 @@ $('source-permission').addEventListener('click',async()=>{
   else status('Доступ не предоставлен. Для подключения сайта нажмите «Разрешить доступ». Текущие экраны сохранены.');
  }catch(error){reportError(error,'permissionRequestFailed');}
 });
-async function start(e){e?.preventDefault();if(busy)return;
+async function start(e){e?.preventDefault();if(busy||updatingExtension)return;
  stoppedByUser=false;
  const operation=++operationRevision;
  let manifest;try{manifest=chrome.runtime.getManifest();}catch(error){reportError(error,'extensionUnavailable');return;}
  if(!manifest.optional_host_permissions?.length){status('Chrome использует старую версию расширения. Откройте chrome://extensions, нажмите круговую стрелку «Обновить» на карточке Brandmaker QA, затем закройте эту панель и откройте её заново.',true);return;}
  let url;try{url=normalizeURL($('url').value);}catch(err){reportError(err,'inputInvalid');return;}
+ const addressInput=$('url');
+ addressInput.setSelectionRange(addressInput.value.length,addressInput.value.length);
+ addressInput.blur();
  // Request optional access directly inside the user's click/submit gesture.
  const u=new URL(url),origin=u.protocol+'//'+u.hostname+'/*';
  busy=true;$('start').disabled=true;updateSessionControls();
@@ -539,7 +561,9 @@ function savePreferences() {
   check404: $('check-404').checked,
   browserMode: $('browser-mode').value,
  };
- return chrome.storage.local.set({ preferences: savedPreferences })
+ const preferences = structuredClone(savedPreferences);
+ preferenceWrites = preferenceWrites.catch(()=>{}).then(()=>chrome.storage.local.set({ preferences }));
+ return preferenceWrites
   .then(() => true).catch(error => { reportError(error, 'settingsSaveFailed'); return false; });
 }
 $('align').addEventListener('click',()=>{if(!running){status('Сначала укажите адрес сайта и нажмите «▶».',true);return;}const source=leader?.ready?leader:cards.find(c=>c.ready);if(!source){status('Экраны ещё не подключились. Дождитесь загрузки и повторите выравнивание.',true);return;}cards.forEach(c=>setURL(c,source.pageurl.textContent));status('Открываем адрес выбранного экрана на всех устройствах.');trace('manual-align',source);});
@@ -560,6 +584,7 @@ function showVersionState(){
  }catch(error){reportError(error,'extensionUnavailable');}
 }
 showVersionState();
+void setupReleaseNotice($('release-notice'),{updateButton:$('apply-extension-update'),applyUpdate:()=>send('apply-extension-update')});
 $('update-dismiss').addEventListener('click',()=>{$('update-notice').hidden=true;});
 try { ({preferences, displayCalibration} = await chrome.storage.local.get(['preferences', 'displayCalibration'])); }
 catch (error) { settingsReadError = true; reportError(error, 'settingsReadFailed'); }

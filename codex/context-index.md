@@ -10,4 +10,5 @@
 | Настройки, отчёты | [data-map.md](data-map.md) | `extension/panel.js`, `extension/background.js` |
 | Проверка и неисправности | [checks.md](checks.md), [runbooks.md](runbooks.md), [audit-types.md](audit-types.md) | Весь `extension/` |
 | Сборка, CI, выпуск | [deploy.md](deploy.md), [checks.md](checks.md), [workflow.md](workflow.md) | `package.json`, `scripts/`, `tests/`, `.github/workflows/ci.yml` |
+| Передача/подключение Chrome Web Store | Сначала раздел передачи в [store-release-plan.md](store-release-plan.md), затем [setup](../store/setup.md), [карточка](../store/listing.md), [аудит](store-security-review.md), [access.md](access.md) | `store/release-state.json`, `scripts/store-publish.cjs`, Store workflows |
 | Согласование и история | [working-agreements.md](working-agreements.md), [decisions.md](decisions.md), [changelog.md](changelog.md), [open-questions.md](open-questions.md), [task-analysis.md](task-analysis.md) | `AGENTS.md` |

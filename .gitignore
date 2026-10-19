@@ -10,3 +10,6 @@ playwright-report/
 # Local Chrome packages and private signing keys are not repository artifacts.
 *.crx
 *.pem
+
+# Browser debug output is never part of a release.
+debug.log

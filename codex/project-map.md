@@ -6,7 +6,7 @@
 
 | Путь | Ответственность |
 |---|---|
-| `extension/manifest.json` | Версия 2.6.19, MV3, service worker module, действие значка, разрешения, PNG-иконки |
+| `extension/manifest.json` | Локальный кандидат 2.6.20, MV3, service worker module, действие значка, разрешения, PNG-иконки |
 | `extension/background.js` | Открытие панели, подготовка сессии, очередь операций, host permissions, session DNR rules, регистрация bridge, источник и очистка |
 | `extension/panel.html` | Русский интерфейс и подключение panel.js как module |
 | `extension/panel.css` | Панель управления, карточки, оболочки устройств, масштабирование iframe, адаптация до 700 px |
@@ -16,6 +16,8 @@
 | `extension/desktop-source.js` | Скрипт основной вкладки: сбор действий, runtime-связь, announce; двустороннее применение событий после проверки сессии |
 | `extension/errors.js` | Общие коды и понятные сообщения ошибок panel/background/devices |
 | `extension/error-notice.js` | Закрываемое сообщение об ошибке, время и счётчик видимых повторений; сброс без удаления diagnostics |
+| `extension/site-suggestions.js` | Стилизованные подсказки только из разрешённых сайтов, клавиатура, выделение текста |
+| `extension/release-notice.js`, `extension/whats-new.*`, `extension/release-notes.json` | Локальная история и уведомление после установки обновления; production-схема ещё в плане |
 | `extension/responsive.js` | Собственный viewport 240..3840 CSS px, drag-ручки рамки/клавиатура, канонические размеры без аппаратного профиля и числовых полей |
 | `extension/qr.js` | Локальный QR-генератор Project Nayuki, лицензия в исходнике |
 | `extension/icons/` | Иконки 16, 48, 128 px |
@@ -23,14 +25,16 @@
 | `codex/device-sources.md` | Основания выбора стартовых профилей и ограничения статистики |
 | `package.json`, `package-lock.json` | Node 22+, версии продукта и devDependencies, команды check/test/build |
 | `scripts/check.cjs` | Синтаксис extension JS, согласованность версий, MV3, точные permissions и наличие файлов manifest |
-| `scripts/build.cjs` | ZIP из 17 файлов extension и 2 справочников codex, фиксированные timestamps |
+| `scripts/build.cjs`, `scripts/release-files.cjs` | ZIP из 25 runtime-файлов и 2 справочников codex; отдельный flat store ZIP без справочников, фиксированные timestamps |
+| `scripts/store-audit.cjs`, `scripts/release-notes.cjs` | Контроль состава и исходников store ZIP, валидатор пользовательских заметок |
+| `tests/message-origin.cjs`, `tests/store-release.cjs` | Origin boundary, загрузка точного store ZIP, локальная история/уведомление, адресные подсказки |
 | `tests/integration.cjs` | Локальный HTTP fixture и headless Chromium: автономная панель, sync, формы, заголовки и cleanup |
 | `tests/desktop.cjs` | Desktop source: взаимодействия, навигация, reload, target blank, одна отправка формы, Stop/закрытие |
 | `tests/source-following.cjs`, `tests/responsive.cjs`, `tests/selection.cjs` | Следование активной вкладке/состояния/отмена, собственные размеры и отсутствие выделения iframe как объекта; результаты запусков — checks.md |
 | `tests/error-notice.cjs`, `tests/pointer-boundary.cjs` | Закрытие/повторение ошибок и отмена жеста на границе iframe; результаты запусков — checks.md |
 | `tests/tablet-geometry.cjs` | Геометрия display/screen, пиксели углов/границ при разных DPR, поворотах, масштабах и панелях; результаты — checks.md |
 | `tests/physical-size.cjs`, `tests/inspection.cjs`, `tests/ui-regressions.cjs`, `tests/preferences.cjs`, `tests/errors.cjs` | Калибровка, проверки страницы, отображение/прокрутка/подсказки и восстановление настроек |
-| `.github/workflows/ci.yml` | Ubuntu/Node 22, установка Chromium, test/build, ZIP artifact по SHA |
+| `.github/workflows/ci.yml` | Ubuntu/Node 22, Chromium, test/build/build:store, отдельные ZIP artifacts по SHA; без публикации |
 | `codex/workflow.md`, `codex/api-map.md` | Совместная работа только main и правила контракта сообщений |
 | `.github/ISSUE_TEMPLATE/task.md`, `.github/PULL_REQUEST_TEMPLATE.md` | Шаблоны задач и сохранившийся необязательный PR template |
 
@@ -53,3 +57,8 @@
 В 2.6.15 access-settings.js управляет списком Chrome host grants и явным отзывом в настройках; background onRemoved очищает лишившиеся доступа сессии/скрипты и уведомляет панель. tests/access-revocation.cjs проверяет этот цикл в изолированном VM. ZIP содержит 19 файлов, включая 11 runtime JS; npm test запускает 15 сценарных скриптов последовательно.
 
 `extension/inspection-report.js` — группировка DOM-замечаний в панели, локальный TXT и команды показа элемента; сканирование и подсветка исполняются в bridge.js.
+
+
+## Автоматизация магазина — локальная подготовка 2026-10-19
+
+Новые release-инструменты: store-release.cjs — provenance, store-publish.cjs — CWS/GitHub state machine, store-workflow-check.cjs — exact artifact gate, store-bootstrap-check.cjs — успешный main CI для первого bootstrap, secret-scan.cjs — redacted repository/package scan, store-assets.cjs — локальные графические материалы карточки. Runtime update-lifecycle.js координирует безопасный reload. store/listing.md/setup.md/privacy.md и releases/ — материалы магазина и пользовательские заметки.

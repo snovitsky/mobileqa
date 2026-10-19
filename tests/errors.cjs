@@ -19,6 +19,9 @@ const { chromium } = require('playwright');
  }
  assert.equal(normalizeURL('localhost:3000/path'), 'https://localhost:3000/path');
  assert.equal(normalizeURL('example.test:8080'), 'https://example.test:8080/');
+ for(const input of ['sdhsdhsgs','https://sdhsdhsgs','https://bad..test','https://-bad.test','https://bad_.test'])assert.throws(()=>normalizeURL(input),error=>error.code==='inputInvalid');
+ assert.equal(normalizeURL('http://localhost:3000/'),'http://localhost:3000/');
+ assert.equal(normalizeURL('http://[::1]:3000/'),'http://[::1]:3000/');
  assert(httpStatusMessage(404).includes('страница не найдена'));
  assert(httpStatusMessage(401).includes('требует входа'));
  assert(httpStatusMessage(403).includes('отказал в доступе'));
@@ -33,7 +36,7 @@ const { chromium } = require('playwright');
  let onMessage;
  const event = () => ({ addListener() {} });
  const chrome = {
-  runtime: { id: 'local-test', getURL: name => 'chrome-extension://local-test/' + name, onMessage: { addListener(listener) { onMessage = listener; } }, sendMessage: async () => {} },
+  runtime: { id: 'local-test', onInstalled: event(), onUpdateAvailable: event(), getURL: name => 'chrome-extension://local-test/' + name, onMessage: { addListener(listener) { onMessage = listener; } }, sendMessage: async () => {} },
   permissions: { contains: async () => state.allowed, onAdded: event(), onRemoved: event() },
   storage: { session: { get: async () => ({}), set: async () => {} } },
   declarativeNetRequest: { getSessionRules: async () => { if (state.nativeFailure) throw new Error('RAW_NATIVE_DETAIL'); return []; }, updateSessionRules: async () => {} },
@@ -43,7 +46,8 @@ const { chromium } = require('playwright');
   action: { onClicked: event() },
  };
  const background = fs.readFileSync(path.join(rootPath, 'extension/background.js'), 'utf8').replace(/^import .*;\r?\n/gm, '');
- vm.runInNewContext(background, { chrome, normalizeURL, ERROR_MESSAGES, userError, userMessage, URL, crypto }, { filename: 'background.js' });
+ const lifecycle = fs.readFileSync(path.join(rootPath, 'extension/update-lifecycle.js'), 'utf8').replace(/^export /gm, '');
+ vm.runInNewContext(lifecycle + '\n' + background, { chrome, normalizeURL, ERROR_MESSAGES, userError, userMessage, URL, crypto }, { filename: 'background.js' });
  const sender = { id: chrome.runtime.id, tab: { id: 100 }, frameId: 0, url: chrome.runtime.getURL('panel.html') };
  const dispatch = message => new Promise(resolve => onMessage(message, sender, resolve));
  const prepare = () => dispatch({ type: 'prepare', url: 'http://example.test/', sourceTabId: 5, compatibility: false });
@@ -121,6 +125,12 @@ const { chromium } = require('playwright');
   assert.equal(await page.locator('#sync-feedback').textContent(), ERROR_MESSAGES.inputInvalid);
   await page.locator('#url').fill(''); await page.locator('#start').click();
   assert.equal(await page.locator('#sync-feedback').textContent(), ERROR_MESSAGES.inputEmpty);
+  await page.evaluate(()=>{window.originalRequest=chrome.permissions.request;window.permissionRequests=0;chrome.permissions.request=async()=>{window.permissionRequests++;return false;};});
+  await page.locator('#url').fill('sdhsdhsgs');await page.locator('#url').press('Enter');
+  assert.equal(await page.locator('#sync-feedback').textContent(),ERROR_MESSAGES.inputInvalid);
+  assert.equal(await page.evaluate(()=>window.permissionRequests),0,'Malformed address must not request site access');
+  assert(await page.locator('#url').evaluate(el=>document.activeElement===el),'Invalid input must retain editing focus');
+  await page.evaluate(()=>{chrome.permissions.request=window.originalRequest;});
   await page.locator('#url').fill(site);
   await page.evaluate(() => { window.originalRequest = chrome.permissions.request; chrome.permissions.request = async () => false; });
   await page.locator('#start').click(); assert.equal(await page.locator('#sync-feedback').textContent(), ERROR_MESSAGES.accessDenied);
@@ -230,10 +240,10 @@ const { chromium } = require('playwright');
   await mixedVersion.goto(`chrome-extension://${id}/panel.html?url=${encodeURIComponent(site)}`);
   await mixedVersion.waitForFunction(()=>!document.querySelector('#update-notice').hidden);
   assert.equal(await mixedVersion.locator('#version').textContent(),'2.6.13');
-  assert((await mixedVersion.locator('#update-notice').textContent()).includes('Доступна версия 2.6.19'));
+  assert((await mixedVersion.locator('#update-notice').textContent()).includes('Доступна версия 2.6.20'));
   await mixedVersion.waitForFunction(()=>document.querySelector('#status').dataset.state==='running');
   assert.equal(await mixedVersion.locator('.screen iframe[src]').count(),4,'An older loaded version may keep working');
-  assert(!(await mixedVersion.evaluate(()=>window.versionSeen)).includes('2.6.19'),'Do not flash the source version as the loaded version');
+  assert(!(await mixedVersion.evaluate(()=>window.versionSeen)).includes('2.6.20'),'Do not flash the source version as the loaded version');
   await mixedVersion.locator('#start').click();
   await mixedVersion.waitForFunction(()=>document.querySelector('#status').dataset.state==='running');
   assert.equal(await mixedVersion.locator('.screen iframe[src]').count(),4);

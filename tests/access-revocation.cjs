@@ -15,7 +15,7 @@ function fixture(initialPanels,initialWatches={}){
  for(const session of Object.values(initialPanels))if(session.sourceTabId)tabs.set(session.sourceTabId,{id:session.sourceTabId,windowId:1,url:'https://'+session.host+'/',status:'complete',active:session.sourceTabId===21});
  const event=name=>({addListener:listener=>{listeners[name]=listener;}});
  const chrome={
-  runtime:{id:'fixture',getURL:()=>panelURL,onMessage:event('message'),sendMessage:async message=>{messages.push(structuredClone(message));}},
+  runtime:{id:'fixture',getURL:()=>panelURL,onInstalled:event('installed'),onUpdateAvailable:event('updateAvailable'),onMessage:event('message'),sendMessage:async message=>{messages.push(structuredClone(message));}},
   storage:{session:{get:async()=>structuredClone(storage),set:async value=>Object.assign(storage,structuredClone(value))}},
   permissions:{contains:async({origins})=>origins.every(origin=>allowed.has(origin)),onRemoved:event('removed'),onAdded:event('added')},
   scripting:{getRegisteredContentScripts:async()=>structuredClone(scripts),unregisterContentScripts:async({ids})=>{scripts=scripts.filter(script=>!ids.includes(script.id));},registerContentScripts:async entries=>{scripts.push(...structuredClone(entries));},updateContentScripts:async()=>{},executeScript:async()=>{}},
@@ -25,7 +25,8 @@ function fixture(initialPanels,initialWatches={}){
  };
  const context=vm.createContext({chrome,URL,crypto:{randomUUID},normalizeURL:value=>new URL(value).href,ERROR_MESSAGES:{},userError:code=>Object.assign(new Error(code),{code}),userMessage:error=>error.message});
  const source=fs.readFileSync(path.resolve(__dirname,'../extension/background.js'),'utf8').replace(/^import .*;\r?\n/gm,'');
- vm.runInContext(source,context,{filename:'background.js'});
+ const lifecycle=fs.readFileSync(path.resolve(__dirname,'../extension/update-lifecycle.js'),'utf8').replace(/^export /gm,'');
+ vm.runInContext(lifecycle+'\n'+source,context,{filename:'background.js'});
  return {allowed,storage,messages,tabMessages,tabs,listeners,get rules(){return rules;},get scripts(){return scripts;},
   request:(message,panel=14)=>new Promise(resolve=>listeners.message(message,{id:'fixture',frameId:0,url:panelURL,tab:{id:panel}},resolve))};
 }
@@ -64,7 +65,7 @@ const session=(host,sourceTabId,scheme='https')=>({host,permissionMatch:scheme+'
  const both=fixture({11:session('alpha.test',21),12:session('alpha.test',22,'http')});both.allowed.delete('https://alpha.test/*');
  await both.listeners.removed({origins:['*://*.alpha.test/*']});assert(!both.storage.panels[11]);assert(both.storage.panels[12]);
  const manifest=JSON.parse(fs.readFileSync(path.resolve(__dirname,'../extension/manifest.json'),'utf8'));
- assert.deepEqual(manifest.permissions,['activeTab','tabs','storage','scripting','declarativeNetRequestWithHostAccess']);
+ assert.deepEqual(manifest.permissions,['tabs','storage','scripting','declarativeNetRequestWithHostAccess']);
  assert.deepEqual(manifest.optional_host_permissions,['http://*/*','https://*/*']);
  console.log('PASS access revocation: exact and wildcard scopes, overlapping grants, session/token/rule/script cleanup, source-stop, watch recovery, pending panel signal, unchanged permissions');
 })().catch(error=>{console.error(error);process.exitCode=1;});

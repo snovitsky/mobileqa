@@ -1,6 +1,6 @@
 # Разрешения и границы доступа
 
-Manifest 2.6.19: activeTab, tabs, storage, scripting, declarativeNetRequestWithHostAccess. tabs добавлено в 2.6.13 по явному согласованию пользователя для чтения URL текущих вкладок и следования выбранной вкладке рабочего окна. API полной истории посещений не используется; полная история не сохраняется. Optional host permissions остаются http://*/* и https://*/*: это доступные к запросу шаблоны, а не автоматически выданный доступ ко всем сайтам.
+Manifest локального кандидата 2.6.20: tabs, storage, scripting, declarativeNetRequestWithHostAccess. Избыточное activeTab удалено; состав не расширен. tabs добавлено в 2.6.13 по явному согласованию пользователя для чтения URL текущих вкладок и следования выбранной вкладке рабочего окна. API полной истории посещений не используется; полная история не сохраняется. Optional host permissions остаются http://*/* и https://*/*: это доступные к запросу шаблоны, а не автоматически выданный доступ ко всем сайтам.
 
 Чтение URL через tabs не даёт права внедрять скрипты на любой сайт. Для нового домена panel запрашивает protocol://hostname/* по нажатию ▶ или «Разрешить доступ». Background отдельно проверяет permissions.contains перед prepare и navigate-source. Пассивное переключение вкладки не вызывает permission prompt. normalizeURL допускает только http/https без username/password.
 
@@ -10,7 +10,7 @@ AGENTS запрещает другие расширения permissions без �
 
 Background регистрирует bridge.js/desktop-source.js на разрешённом match с allFrames, document_start и persistAcrossSessions:false. Bridge покидает обычный top frame; desktop-source покидает iframe. Handshake разрешает работу только для подходящей session/tab/frame/host. Поздняя инъекция desktop-source остаётся запасным подключением.
 
-Token crypto.randomUUID хранится в storage.session. Panel-команды требуют extension sender, frame 0 и URL panel.html. Source-сообщения дополнительно проверяют источник, host, token и allowlist событий. Panel проверяет panelTabId, текущий token, режим и подключение источника; сообщения iframe — token и соответствующий contentWindow. Это контекстные guards, не модель пользовательских ролей. Resolve/prepare объявляют protocolVersion:1; несовместимая версия требует обновить расширение и заново открыть панель.
+Token crypto.randomUUID хранится в storage.session. Panel-команды требуют extension sender, frame 0 и URL panel.html. Source-сообщения дополнительно проверяют источник, host, token и allowlist событий. Panel проверяет panelTabId, текущий token, режим и подключение источника; сообщения iframe — token, соответствующий contentWindow и точный preparedOrigin в обе стороны. Это контекстные guards, не модель пользовательских ролей. Resolve/prepare объявляют protocolVersion:1; несовместимая версия требует обновить расширение и заново открыть панель.
 
 sourceWatches хранят только текущие ID источника/рабочего окна. Следование ограничено одним normal-окном; панель не выбирается источником, другие окна не перехватываются. Закрытое наблюдаемое окно даёт unavailable; восстановление первоначальной панели со старыми ID рассматривается отдельно и выбирает подходящий сайт того же доступного normal-окна. Ожидаемая недоступность адреса/сайта и отсутствие host access возвращаются нейтральными candidate-состояниями.
 
@@ -35,3 +35,8 @@ Stop по-прежнему только останавливает сеанс; �
 Читаемое Unicode-представление hostname используется только в списке/доступной подписи кнопки; ASCII pattern остаётся источником операции remove и показан в title. Отображение не доказывает подлинность сайта и не меняет выданный scope.
 
 Для совместимой старой загруженной версии worker панель также слушает onRemoved и после успешного remove перепроверяет свой текущий exact permission: при утрате blank/token invalidation + stop. UI регрессия проверяет этот путь без нового broadcast. Рекомендация обновить версию не запрещает работу; реальная недоступность Chrome API или несовместимый протокол остаются отдельной ошибкой.
+
+
+## Автоматизация магазина — локальная подготовка 2026-10-19
+
+Chrome permissions не расширены. Применение обновления требует точного sender extension/frame0/panel.html, готовой новой версии и подтверждения UI. CWS/GitHub токены используются только на ephemeral Actions runner, не в расширении. OIDC main/environment, scoped service account без постоянного JSON-ключа; staging/PR не имеют права публикации.

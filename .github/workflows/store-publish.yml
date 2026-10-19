@@ -1,0 +1,76 @@
+name: Chrome Web Store publication
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: chrome-web-store-production
+  cancel-in-progress: false
+jobs:
+  publish:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.head_repository.full_name == github.repository &&
+      vars.CWS_PUBLISH_ENABLED == 'true'
+    environment: chrome-web-store
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      actions: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          persist-credentials: false
+      - id: activation
+        name: Honor the owner's deferred publication decision
+        run: node scripts/store-workflow-check.cjs activation
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        if: steps.activation.outputs.enabled == 'true'
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --ignore-scripts
+        if: steps.activation.outputs.enabled == 'true'
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        if: steps.activation.outputs.enabled == 'true'
+        with:
+          name: brandmaker-qa-store-${{ github.event.workflow_run.head_sha }}
+          path: dist
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ github.event.workflow_run.id }}
+      - name: Check configuration and exact source artifact
+        if: steps.activation.outputs.enabled == 'true'
+        env:
+          CWS_PUBLISHER_ID: ${{ vars.CWS_PUBLISHER_ID }}
+          CWS_ITEM_ID: ${{ vars.CWS_ITEM_ID }}
+          GCP_WORKLOAD_IDENTITY_PROVIDER: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          GCP_SERVICE_ACCOUNT: ${{ vars.GCP_SERVICE_ACCOUNT }}
+          EXPECTED_SOURCE_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: node scripts/store-workflow-check.cjs
+      - id: google
+        if: steps.activation.outputs.enabled == 'true'
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+          token_format: access_token
+          access_token_scopes: https://www.googleapis.com/auth/chromewebstore
+          create_credentials_file: false
+          export_environment_variables: false
+      - name: Upload and submit the tested package
+        if: steps.activation.outputs.enabled == 'true'
+        env:
+          CWS_ACCESS_TOKEN: ${{ steps.google.outputs.access_token }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CWS_PUBLISHER_ID: ${{ vars.CWS_PUBLISHER_ID }}
+          CWS_ITEM_ID: ${{ vars.CWS_ITEM_ID }}
+          CWS_SOURCE_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: node scripts/store-publish.cjs submit

@@ -1,0 +1,17 @@
+const assert = require('node:assert/strict');
+const {validateNotes,releaseNotes,compareVersions} = require('../scripts/release-notes.cjs');
+const {validateRecord,digest} = require('../scripts/store-release.cjs');
+const first = {version:'2.6.20',fromVersion:null,baselineSha:null,date:'2026-10-19',title:'Первый выпуск',changes:['Сравнивайте сайты на нескольких экранах.']};
+const next = {version:'2.7.1',fromVersion:'2.6.20',baselineSha:'a'.repeat(40),date:'2026-10-19',title:'Удобнее выбирать адрес',changes:['Выбирайте сайт из списка разрешённых.']};
+assert.equal(compareVersions('2.7.1','2.6.20'),1);assert.equal(compareVersions('2.7.1','2.7.1.0'),0);
+assert.throws(()=>compareVersions('2.7.1-beta','2.6.20'));
+const data={releases:[next,first]};validateNotes(data);
+const text=releaseNotes('2.7.1',{verifyFile:false,data});
+assert(text.includes('Изменения с версии 2.6.20.')&&!text.includes('2.6.21'),'One aggregate production list, without intermediate dev releases');
+assert.throws(()=>validateNotes({releases:[{...next,fromVersion:'2.6.99'},first]}));
+assert.throws(()=>validateNotes({releases:[{...next,baselineSha:null},first]}));
+assert.throws(()=>validateNotes({releases:[{...first,fromVersion:'2.6.19'}]}));
+const record={schemaVersion:1,version:'2.7.1',fromVersion:'2.6.20',baselineSha:'a'.repeat(40),sourceSha:'b'.repeat(40),zipFile:'brandmaker-qa-2.7.1-store.zip',notesFile:'release-notes-2.7.1.md',zipSha256:digest(Buffer.from('zip')),notesSha256:digest(Buffer.from(text))};
+validateRecord(record);
+for(const patch of [{sourceSha:'main'},{notesFile:'../notes.md'},{zipSha256:'missing'},{baselineSha:null},{fromVersion:null}])assert.throws(()=>validateRecord({...record,...patch}));
+console.log('PASS aggregate production baselines, version ordering, immutable note text and release provenance guards');

@@ -212,3 +212,33 @@ UI теперь подтверждает исходный фокус перед 
 Дополнение 2.6.19: на публичной странице без взаимодействий проверен iframe#ab — checks.botfaqtor.ru, 300×150, absolute, left/top −9999 (идентификация основана на фактическом DOM, не предположении о Метрике). Локальная inspection-регрессия с перехваченным внешним URL и пустой фикстурой — PASS: служебная рамка исключена; обычный iframe, видимый ab того же сервиса и offscreen ab с другим src остаются в проверке. Кнопка ↻ действительно заменяет iframe макетов, после Stop возвращаются SVG ▶ и его aria-label. Внешний сервис в автоматических тестах не запрашивается.
 
 После дополнений ↻/служебного iframe повторно пройдены полный `npm test` и `npm run build`; итоговое условие исключения дополнительно проверено targeted inspection после уточнения координат документа. Регрессия прокрутки подтверждает, что scroll не превращает обычный iframe в служебное исключение. `git diff --check` и валидация codex/ — PASS. После push обязательна проверка Actions нового SHA.
+
+## Локальная подготовка магазина 2.6.20 — 2026-10-19
+
+На Windows/Node 24 выполнены npm test (все 17 browser/fixture suites), npm run build и npm run build:store. Отдельно выполнены message-origin.cjs и store-release.cjs. Origin regression обнаруживает утечку на временно возвращённом старом wildcard-поведении и проходит на исправленном. Store test проверяет загрузку точного ZIP, отсутствие activeTab/внутренних файлов, offline notes, уведомление update и сохранённое закрытие.
+
+Новые адресные сценарии: собственный список совпадает с input по координатам/ширине; Tab подставляет первый вариант, полное совпадение (Unicode/ASCII/без схемы) скрыто; выбор мышью/стрелками, Escape, отзыв grants; обычный клик/select-all и сохранение drag-выделения до/после mouseup, включая первый фокус; валидный Enter снимает выделение/фокус, неверный адрес не вызывает permissions.request. После финальных правок адресной строки релевантные store-release/errors тесты повторены. Проверка реального Ubuntu CI для текущего незакоммиченного кандидата не выполнялась.
+
+npm audit --json сообщил 0 известных уязвимостей devDependencies. Текущий store ZIP: 24 runtime-файла. Фото подсказок для визуальной проверки создаётся в dist/site-suggestions.png; в пакет не входит. Реальные аккаунт/CWS API/первичная установка магазина не проверялись.
+
+Финальный повтор после всех правок выбора/выделения/blur: полный npm test, npm run build и npm run build:store завершились с exit 0. Validator codex/: 0 errors/0 warnings, git diff --check без ошибок; YAML workflow разобран и содержит build:store. Обычный ZIP: 26 файлов, SHA-256 c0b97b0b55e807107a93354676d6e8267d9376a4e7796e3676fdbc9e38295d7e. Store ZIP: 24 файла, SHA-256 ee8fa60361837d67300626c6fe1eb11a3e99a0ca4e82b6ae16a7a93980f24875. Это локальные artifacts незакоммиченного кандидата, не подтверждение магазинной публикации.
+
+## Автоматизация магазина: итог локальной реализации 2026-10-19
+
+На Windows/Node 24.1.0 полный npm test — PASS: check, audit:secrets и все 22 test suites. npm run build и npm run build:store — PASS. Реальное подключение аккаунтов/текущий Ubuntu Actions не выполнялись: изменения ещё не закоммичены/не отправлены. Прежнюю нестабильность focus assertion в Ubuntu не объявляем исправленной без отдельного подтверждения.
+
+Дополнительные fixtures проверяют CWS v2 single-candidate/baseline/digests, unknown-write без retry, публикацию production tag только после Store PUBLISHED 100%, docs-only повтор, explicit operator bootstrap без CWS write, readonly status без GitHub вызовов, aggregate notes/metadata. update-lifecycle проверяет native available/install, точного sender, сохранение всех панелей, очистку перед reload, запрет reload при ошибке. Browser store-release проверяет pending notice, health independence, отказ confirm, «Позже» и доступную кнопку в настройках.
+
+После полного прогона уточнена только изоляция connection verification в YAML: отдельный readonly job работает до включения публикации и не запускает monitor/финализацию GitHub release. tests/store-workflow.cjs и tests/store-publish.cjs повторно PASS на этой конфигурации; повторные secret scan, docs validator и diff check также PASS.
+
+Поиск секретов: 97 текстовых файлов текущего репозитория, без найденных сигнатур Yandex/Google/GitHub/AWS/JWT/private key/literal credentials. Все текстовые файлы store ZIP дополнительно сканируются при build. Значения не выводятся; другие проекты/системные хранилища/Git history не сканировались. Это не гарантия отсутствия секрета неизвестного формата.
+
+Актуальные artifacts: обычный ZIP — 27 файлов, SHA-256 67e99f271fdf56a2dae342d238ff72d4c51f607b39d4b5c66288a7bdf1a88009; store ZIP — 25 runtime-файлов, SHA-256 91c79dd7d10c46dbea17b903e967d1ce11dda503e5ed6fb43858c8f238dd534b. Предыдущие hashes в разделе выше относятся к более ранней локальной итерации той же версии. Реальный release provenance будет создан CI для подтверждённого source commit SHA, не для грязного локального дерева.
+
+scripts/store-assets.cjs выполнен: panel-1280x800.png, promo-440x280.png, icon-128.png в dist/store-assets. Обе композиции просмотрены: реальная панель с локальным нейтральным demo, без клиентских данных; assets не входят в runtime ZIP. Изолированные browser/server/temp ресурсы скрипта закрыты/удалены штатным finally.
+
+## Передача в main без активации магазина
+
+После решения владельца передать работу другому исполнителю добавлены handoff-раздел и store/release-state.json automationEnabled=false. Publish/monitor workflow и CLI проверяют блокиратор; конфигурационный шаг не требует npm-зависимостей и выполняется до Google auth. Readonly status и explicit bootstrap остаются отдельными ручными действиями будущей настройки. Сохранены те же полные проверки обеих веток; staging в этой передаче не создаётся.
+
+На финальном состоянии передачи повторно PASS: npm test (все 22 suites + audit:secrets), npm run build и npm run build:store. Поиск секретов — 98 текстовых файлов репозитория, без обнаруженных сигнатур; store ZIP — 25 runtime-файлов. Activation false и отказ CLI submit/monitor при выключенной автоматике проверены fixtures. Реальный CI проверяется после согласованного push точного коммита в main; Store/Cloud аккаунты не настраивались.

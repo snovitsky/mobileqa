@@ -1,0 +1,97 @@
+name: Chrome Web Store review status
+on:
+  schedule:
+    - cron: '17,47 * * * *'
+  workflow_dispatch:
+    inputs:
+      verify_connection:
+        description: Verify the Store connection without uploading or publishing
+        type: boolean
+        default: false
+permissions:
+  contents: read
+concurrency:
+  group: chrome-web-store-production
+  cancel-in-progress: false
+jobs:
+  status:
+    if: github.ref == 'refs/heads/main' && vars.CWS_PUBLISH_ENABLED == 'true' && inputs.verify_connection != true
+    environment: chrome-web-store
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: main
+          persist-credentials: false
+      - id: activation
+        name: Honor the owner's deferred publication decision
+        run: node scripts/store-workflow-check.cjs activation
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        if: steps.activation.outputs.enabled == 'true'
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --ignore-scripts
+        if: steps.activation.outputs.enabled == 'true'
+      - id: pending
+        if: steps.activation.outputs.enabled == 'true'
+        name: Find an unfinished store release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node scripts/store-publish.cjs pending
+      - id: google
+        if: steps.pending.outputs.pending == 'true'
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+          token_format: access_token
+          access_token_scopes: https://www.googleapis.com/auth/chromewebstore.readonly
+          create_credentials_file: false
+          export_environment_variables: false
+      - if: steps.pending.outputs.pending == 'true'
+        name: Confirm publication or report a review failure
+        env:
+          CWS_ACCESS_TOKEN: ${{ steps.google.outputs.access_token }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CWS_PUBLISHER_ID: ${{ vars.CWS_PUBLISHER_ID }}
+          CWS_ITEM_ID: ${{ vars.CWS_ITEM_ID }}
+        run: node scripts/store-publish.cjs monitor
+  verify:
+    if: github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch' && inputs.verify_connection == true
+    environment: chrome-web-store
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: main
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - id: google
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+          token_format: access_token
+          access_token_scopes: https://www.googleapis.com/auth/chromewebstore.readonly
+          create_credentials_file: false
+          export_environment_variables: false
+      - name: Read Store identity and status without mutations
+        env:
+          CWS_ACCESS_TOKEN: ${{ steps.google.outputs.access_token }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CWS_PUBLISHER_ID: ${{ vars.CWS_PUBLISHER_ID }}
+          CWS_ITEM_ID: ${{ vars.CWS_ITEM_ID }}
+        run: node scripts/store-publish.cjs status

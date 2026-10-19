@@ -87,3 +87,12 @@ source-navigate сравнивает целевой URL с pendingUrl || url в�
 ## Геометрия результатов 2.6.19
 
 page-findings сохраняет envelope и поля inspectionId/url/viewport/findings/truncated. У overflow finding опционален relatedCount — число вложенных кандидатов с тем же переполнением, объединённых в этот пункт. Panel проверяет viewport.width/height против текущих CSS-размеров конкретного source iframe и не принимает результат прежнего размера. Изменение геометрии карточки инвалидирует её отчёт и запускает локальный debounced inspect-page; протокол синхронизации действий не менялся.
+
+## Уточнение границы origin в локальном кандидате 2.6.20
+
+Panel отправляет iframe-команды с targetOrigin=preparedOrigin и принимает сообщения только при e.origin===preparedOrigin вместе с прежними contentWindow/token/состоянием. Навигация рамки на другой origin не даёт ей получить служебный envelope прежнего сайта. Регрессия message-origin.cjs проверяет и исходящие команды, и подделку входящего ready с правильным токеном от чужого origin.
+
+
+## Автоматизация магазина — локальная подготовка 2026-10-19
+
+Новое apply-extension-update: только точная панель, frame0. Background шлёт extension-update-stop с panelTabId, каждая целевая панель сохраняет preferences и отвечает {ok,panelTabId}; инициатор сохраняется последним. После всех ack удаляется временное состояние и вызывается runtime.reload. При сбое — extension-update-failed адресным панелям и снятие latch, без reload. onUpdateAvailable только сохраняет pending version.

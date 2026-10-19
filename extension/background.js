@@ -1,5 +1,6 @@
 import { normalizeURL } from './devices.js';
 import { ERROR_MESSAGES, userError, userMessage } from './errors.js';
+import { setupUpdateLifecycle } from './update-lifecycle.js';
 const sessions=new Map(),watches=new Map(),candidates=new Map();
 const panelURL=chrome.runtime.getURL('panel.html');
 const ready=chrome.storage.session.get(['panels','sourceWatches']).then(({panels={},sourceWatches={}})=>{
@@ -9,6 +10,16 @@ const ready=chrome.storage.session.get(['panels','sourceWatches']).then(({panels
 const persist=()=>chrome.storage.session.set({panels:Object.fromEntries(sessions),sourceWatches:Object.fromEntries(watches)});
 let queue=Promise.resolve();
 const serial=fn=>{const next=queue.catch(()=>{}).then(fn);queue=next;return next;};
+const extensionUpdates=setupUpdateLifecycle({chrome,serial,ready,panelURL,cleanupAll:async()=>{
+ const rules=await chrome.declarativeNetRequest.getSessionRules();
+ if(rules.length)await chrome.declarativeNetRequest.updateSessionRules({removeRuleIds:rules.map(rule=>rule.id)});
+ const scripts=await chrome.scripting.getRegisteredContentScripts();
+ const ids=scripts.filter(script=>script.js?.some(file=>['bridge.js','desktop-source.js'].includes(file))).map(script=>script.id);
+ if(ids.length)await chrome.scripting.unregisterContentScripts({ids});
+ const sources=new Set([...sessions.values()].map(session=>session.sourceTabId).filter(Boolean));
+ for(const id of sources)await chrome.tabs.sendMessage(id,{type:'source-stop'}).catch(()=>{});
+ sessions.clear();watches.clear();candidates.clear();await persist();
+}});
 const positive=id=>Number.isSafeInteger(id)&&id>0;
 const isPanel=tab=>tab.url?.startsWith(panelURL);
 async function describeSource(tab,sourceWindowId){
@@ -144,6 +155,11 @@ chrome.action.onClicked.addListener(tab=>serial(async()=>{
 }).catch(()=>{}));
 chrome.runtime.onMessage.addListener((msg,sender,reply)=>{
  if(sender.id!==chrome.runtime.id||!sender.tab)return;
+ if(msg.type==='apply-extension-update'){
+  // The helper validates an exact panel pathname, extension identity and top frame.
+  serial(()=>extensionUpdates.apply(sender)).then(data=>reply({ok:true,data}),()=>reply({ok:false,code:'operationFailed'}));return true;
+ }
+ if(extensionUpdates.applying){reply({ok:false,code:'operationFailed'});return;}
  if(msg.type==='source-hello'||msg.type==='source-event'){
   ready.then(()=>{const pair=[...sessions].reverse().find(([panel,s])=>s.sourceTabId===sender.tab.id&&sender.frameId===0&&new URL(sender.url).hostname===s.host&&(!watches.has(panel)||watches.get(panel).sourceTabId===sender.tab.id)&&(msg.type==='source-hello'||msg.token===s.token));if(msg.type==='source-hello'){reply({enabled:!!pair,token:pair?.[1].token});return;}if(pair&&msg.token===pair[1].token&&['ready','route','interaction','loading','blocked','intent','missing','sync-ack'].includes(msg.eventType)){chrome.runtime.sendMessage({type:'desktop-source-event',panelTabId:pair[0],token:pair[1].token,eventType:msg.eventType,payload:msg.payload}).catch(()=>{});}reply({ok:true});}).catch(()=>reply({enabled:false}));return true;
  }
@@ -153,7 +169,7 @@ chrome.runtime.onMessage.addListener((msg,sender,reply)=>{
  if(sender.frameId!==0||!sender.url?.startsWith(panelURL))return;
  const fallback=msg.type==='prepare'?'startFailed':msg.type==='stop'?'stopFailed':['set-sync','source-apply','source-navigate','resync-source'].includes(msg.type)?'syncFailed':'operationFailed';
  serial(async()=>{
-  await ready;const panel=sender.tab.id;
+  await ready;if(extensionUpdates.applying)throw userError('operationFailed');const panel=sender.tab.id;
   if(msg.type==='resolve-source')return {...await resolveSource(msg,panel),protocolVersion:1};
   if(msg.type==='watch-source'){
    if(!msg.enabled){watches.delete(panel);candidates.delete(panel);await persist();return true;}

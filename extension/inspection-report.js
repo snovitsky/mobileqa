@@ -1,5 +1,4 @@
 const categories={overflow:'Выход за границы экрана',target:'Маленькие области нажатия',text:'Мелкий текст'};
-const note='Проверен только этот экран в указанных CSS-размерах. Скрытое содержимое слайдеров и областей прокрутки исключается. Замечания требуют ручной проверки.';
 const related=item=>Number.isSafeInteger(item.relatedCount)&&item.relatedCount>0?`Вложенные элементы с тем же переполнением: ${item.relatedCount}. Объединены в один пункт.`:'';
 const element=(tag,text,className)=>{const el=document.createElement(tag);if(text)el.textContent=text;if(className)el.className=className;return el;};
 function repeatedFindings(findings){
@@ -17,12 +16,12 @@ export function renderInspectionReport(card,data,showFinding){
  box.hidden=false;box.open=true;list.replaceChildren();
  box.querySelector('summary').textContent=`Проверка вёрстки: ${findings.length} замечаний${data.truncated?' (часть результатов)':''}`;
  list.className='findings-content';
- list.append(element('p',context,'findings-context'),element('p',note,'findings-note'));
+ list.append(element('p',context,'findings-context'));
  const feedback=element('p','','findings-feedback');feedback.setAttribute('role','status');
  card.inspection={id:data.inspectionId,url:data.url,feedback};
  const download=element('button','Скачать отчёт');download.type='button';
  download.addEventListener('click',()=>{
-  const lines=['# Проверка вёрстки',`Адрес: ${data.url}`,`Экран: ${context}`,note,''];
+  const lines=['# Проверка вёрстки',`Адрес: ${data.url}`,`Экран: ${context}`,''];
   for(const [kind,title] of Object.entries(categories)){
    const group=findings.filter(item=>item.kind===kind);if(!group.length)continue;
    lines.push(`## ${title} — ${group.length}`,'');

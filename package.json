@@ -1,17 +1,23 @@
 {
   "name": "brandmaker-qa",
-  "version": "2.6.19",
+  "version": "2.6.20",
   "private": true,
   "engines": {
     "node": ">=22"
   },
   "scripts": {
     "check": "node scripts/check.cjs",
-    "test": "npm run check && node tests/integration.cjs && node tests/desktop.cjs && node tests/physical-size.cjs && node tests/inspection.cjs && node tests/ui-regressions.cjs && node tests/preferences.cjs && node tests/errors.cjs && node tests/source-following.cjs && node tests/responsive.cjs && node tests/selection.cjs && node tests/pointer-boundary.cjs && node tests/error-notice.cjs && node tests/tablet-geometry.cjs && node tests/access-revocation.cjs && node tests/url-display.cjs",
+    "test": "npm run check && npm run audit:secrets && node tests/integration.cjs && node tests/desktop.cjs && node tests/physical-size.cjs && node tests/inspection.cjs && node tests/ui-regressions.cjs && node tests/preferences.cjs && node tests/errors.cjs && node tests/source-following.cjs && node tests/responsive.cjs && node tests/selection.cjs && node tests/pointer-boundary.cjs && node tests/error-notice.cjs && node tests/tablet-geometry.cjs && node tests/access-revocation.cjs && node tests/url-display.cjs && node tests/message-origin.cjs && node tests/store-release.cjs && node tests/release-metadata.cjs && node tests/store-publish.cjs && node tests/update-lifecycle.cjs && node tests/store-workflow.cjs && node tests/secret-scan.cjs",
     "test:integration": "node tests/integration.cjs",
     "test:desktop": "node tests/desktop.cjs",
     "build": "npm run check && node scripts/build.cjs",
-    "test:physical": "node tests/physical-size.cjs"
+    "test:physical": "node tests/physical-size.cjs",
+    "build:store": "npm run check && node scripts/release-notes.cjs && node scripts/build.cjs --store",
+    "audit:store": "node scripts/store-audit.cjs",
+    "notes": "node scripts/release-notes.cjs",
+    "notes:write": "node scripts/release-notes.cjs --write",
+    "store:assets": "node scripts/store-assets.cjs",
+    "audit:secrets": "node scripts/secret-scan.cjs"
   },
   "devDependencies": {
     "fflate": "0.8.3",
