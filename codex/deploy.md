@@ -4,13 +4,17 @@
 
 Node.js 22+, `npm ci`, затем `npx playwright install chromium` (Linux: при необходимости `--with-deps`). Это инструкции проекта, не перечень выполненных при обновлении документации действий. Runtime расширения не зависит от npm; devDependencies — Playwright 1.62.1 и fflate 0.8.3.
 
-Перед push: `npm test` и `npm run build`. Build сначала запускает check, затем scripts/build.cjs через fflate формирует `dist/brandmaker-qa-2.6.17.zip`. В ZIP 20 явно разрешённых файлов: 18 файлов приложения в extension/ (двенадцать JS, panel.html/css, manifest и три иконки) и codex/user-guide.md, codex/device-sources.md. В runtime включены responsive.js, error-notice.js, access-settings.js, url-display.js и inspection-report.js. Справочники берутся из единственного исходного места codex/; остальные внутренние документы, AGENTS, tests, node_modules и рабочие файлы не упаковываются. Timestamps ZIP фиксированы датой 2020-01-01; это артефакт поставки, а не резервная копия.
+Перед push: `npm test` и `npm run build`. Build сначала запускает check, затем scripts/build.cjs через fflate формирует `dist/brandmaker-qa-2.6.18.zip`. В ZIP 20 явно разрешённых файлов: 18 файлов приложения в extension/ (двенадцать JS, panel.html/css, manifest и три иконки) и codex/user-guide.md, codex/device-sources.md. В runtime включены responsive.js, error-notice.js, access-settings.js, url-display.js и inspection-report.js. Справочники берутся из единственного исходного места codex/; остальные внутренние документы, AGENTS, tests, node_modules и рабочие файлы не упаковываются. Timestamps ZIP фиксированы датой 2020-01-01; это артефакт поставки, а не резервная копия.
 
 ## GitHub Actions
 
 `.github/workflows/ci.yml`: push в main и pull_request; job checks, ubuntu-24.04, Node 22, timeout 15 минут, contents read. Порядок: checkout → setup-node/npm cache → npm ci → playwright install --with-deps chromium → npm test → npm run build → upload artifact. Artifact называется brandmaker-qa-<SHA>, содержит dist/*.zip; отсутствие ZIP завершает upload ошибкой. Concurrency по ref отменяет предыдущий незавершённый run.
 
 Workflow реагирует на PR, но не требует создавать PR. По зафиксированным правилам workflow main допускает прямой push, обязательные PR/review/checks отключены владельцем. Это зафиксированное соглашение; настройки GitHub и результаты конкретных Actions runs отдельно не проверялись. Локальные проверки остаются обязательными перед отправкой.
+
+## Подтверждённая поставка 2.6.17
+
+Приложение и проверки коммита 04172716a72e7bce4980188e5371f8f0ffc35708 прошли полный GitHub Actions CI на Ubuntu 24.04/Node 22: https://github.com/snovitsky/mobileqa/actions/runs/39252205754. Шаги test, build и upload-artifact — success. Артефакт brandmaker-qa-04172716a72e7bce4980188e5371f8f0ffc35708 (id 12184904857) содержит ZIP 2.6.17. Локальный установочный файл — dist/brandmaker-qa-2.6.17.zip; загрузка unpacked extension/ описана в user-guide. Публикация в Chrome Web Store/GitHub Release этим процессом не выполнялась.
 
 ## Согласованный выпуск
 

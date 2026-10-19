@@ -180,3 +180,18 @@ Run https://github.com/snovitsky/mobileqa/actions/runs/39251372708 прошёл 
 UI теперь подтверждает исходный фокус перед Tab/Shift+Tab и ожидает итоговые focused/focus-visible/compact через expect.poll. Сохранены исходные ограничения outlineWidth (0,2], outlineOffset<=0, запрет прежнего зелёного ореола. При неуспехе видны активный элемент и фактические стили. После закрытия modal ожидаются open=false и две перерисовки, чтобы не пересекаться с возвратом native focus. Повторных Tab/искусственного возврата фокуса после Shift+Tab нет.
 
 Итог изменения ожиданий focus: targeted UI DPR 1/1.25/2, полный npm test (15 сценариев) и npm run build — PASS локально. Валидатор codex/ и git diff --check — PASS. Remote результат определяется последующим run.
+
+## Подтверждённый Ubuntu CI версии 2.6.17
+
+Коммит приложения/тестов 04172716a72e7bce4980188e5371f8f0ffc35708: https://github.com/snovitsky/mobileqa/actions/runs/39252205754 — completed/success. На Ubuntu 24.04/Node 22 успешно завершены npm ci, установка Chromium, полный npm test, npm run build и upload-artifact. Подтверждены desktop input после навигации и keyboard focus во всех DPR; повторный ввод, ослабление matching/outline и пропуск сценариев не применялись. Точный исходный параметр старого focus assert неизвестен, но обновлённое ожидание прошло все прежние условия на Ubuntu.
+
+Артефакт id 12184904857: brandmaker-qa-04172716a72e7bce4980188e5371f8f0ffc35708, 83 233 bytes, expired=false при проверке. SHA256 контейнера artifact: ce7ac5a511273ad18ef00766bab76161e31c68b96c3342d52df7bb486acab6d5. Это digest контейнера GitHub, а не вложенного brandmaker-qa-2.6.17.zip. Предыдущие failure runs сохранены выше как история расследования.
+
+
+## Первый клик после reload: 2.6.18
+
+После успешного Ubuntu CI 0417271 повторный локальный полный прогон обнаружил потерю immediate click после source.reload: source-event click был в desktopTrace, но панель ещё ожидала resolver и не передавала действие. Добавлена управляемая стадия loading → реальный source click → ready без повторного клика. На прежнем runtime новая регрессия стабильно получила «Закрыто» вместо «Открыто» (5000 ms), после очереди прошла. Desktop дополнительно проверяет, что queued click отменяется выключением/повторным включением Sync и переходом через unsupported; естественный reload по-прежнему кликается сразу, а результат ожидается на всех актуальных iframe. Вместо ненадёжного лимита 300 ms проверяется достижение результата без повторного действия.
+
+Для управляемого loading в desktop fixture временно меняются обе Chrome API tabs.get и tabs.query: иначе фокус панели мог вернуть ready раньше проверки отмены. После этого positive/cancel и natural reload прошли. В source-following добавлена проверка source-navigate при pendingUrl уже равном цели: повторный tabs.update не вызывается, текущая навигация не перезапускается. Проверка выбора контроллера использует отдельный trusted ArrowLeft после подтверждённого ввода, чтобы явно обозначить последнее управление телефоном.
+
+Итог 2.6.18 перед отправкой: полный npm test (check + 15 скриптов), npm run build — PASS на итоговых исходниках. Targeted desktop и source-following с новой очередью/pendingUrl также PASS. ZIP: 20 записей, CRC/байты исходников/manifest 2.6.18 — PASS; проверки исходных permissions сохранены. Прежний success Ubuntu 0417271 относится к 2.6.17; итоговый CI 2.6.18 проверяется отдельно по SHA после push.

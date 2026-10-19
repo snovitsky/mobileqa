@@ -41,6 +41,22 @@ const http = require('node:http');
    }, suffix);
   }
   await shown('/first');
+  // Подтверждение маршрута не должно перезапускать уже начатую native-навигацию.
+  const pendingURL=site+'/pending';
+  const pendingToken=await worker.evaluate(async sourceId=>Object.values((await chrome.storage.session.get('panels')).panels).find(s=>s.sourceTabId===sourceId).token,original.id);
+  await worker.evaluate(({sourceId,pendingURL})=>{
+   const get=chrome.tabs.get.bind(chrome.tabs),update=chrome.tabs.update.bind(chrome.tabs);
+   globalThis.qaOriginalTabsGet=chrome.tabs.get;globalThis.qaOriginalTabsUpdate=chrome.tabs.update;globalThis.qaPendingUpdates=[];
+   chrome.tabs.get=async id=>{const tab=await get(id);return id===sourceId?{...tab,pendingUrl:pendingURL,status:'loading'}:tab;};
+   chrome.tabs.update=async(id,options)=>{if(id===sourceId&&options?.url)globalThis.qaPendingUpdates.push(options.url);return update(id,options);};
+  },{sourceId:original.id,pendingURL});
+  try{
+   const response=await panel.evaluate(({token,url})=>chrome.runtime.sendMessage({type:'source-navigate',token,url}),{token:pendingToken,url:pendingURL});
+   assert.equal(response.ok,true);
+   assert.deepEqual(await worker.evaluate(()=>globalThis.qaPendingUpdates),[],'Do not restart matching pendingUrl navigation');
+  }finally{
+   await worker.evaluate(()=>{chrome.tabs.get=globalThis.qaOriginalTabsGet;chrome.tabs.update=globalThis.qaOriginalTabsUpdate;delete globalThis.qaOriginalTabsGet;delete globalThis.qaOriginalTabsUpdate;delete globalThis.qaPendingUpdates;});
+  }
   assert.equal(await panel.locator('#start').getAttribute('aria-pressed'), 'true');
   assert.equal(await panel.locator('#stop').getAttribute('aria-pressed'), 'false');
   assert.equal(await panel.locator('#session-state').textContent(), 'Работает');

@@ -12,6 +12,7 @@ const requestedWindowId = Number(new URLSearchParams(location.search).get('sourc
 let sourceWindowId = Number.isSafeInteger(requestedWindowId) && requestedWindowId > 0 ? requestedWindowId : null;
 let panelTabId = null, sourceConnected = false, watchingSource = false, sourceRevision = 0, sessionSourceId = null;
 let sourceCandidate = null, pendingCandidate = null, processingCandidate = false;
+let pendingSourceEvents = [];
 let processingSourceKey = '';
 let sourceRecoveryTimer = null;
 let operationRevision = 0, pendingStandalone = false, forceSourceRefresh = false;
@@ -76,7 +77,7 @@ const siteAccess=setupSiteAccess({
 function invalidateAccessView(){
  operationRevision++;sourceRevision++;pendingCandidate=null;pendingStandalone=false;forceSourceRefresh=false;
  clearTimeout(sourceRecoveryTimer);
- running=false;sourceConnected=false;sessionSourceId=null;token='';leader=null;
+ running=false;sourceConnected=false;sessionSourceId=null;token='';leader=null;pendingSourceEvents=[];
  cards.forEach(c=>{blank(c);c.pending=[];c.placeholder.hidden=false;c.placeholder.textContent='Доступ к сайту отозван';c.state.textContent='Доступ отозван';});
  $('stop').disabled=true;
  status('Доступ к сайту отозван. Экраны и синхронизация отключены. Чтобы открыть сайт снова, нажмите ▶ и разрешите доступ.');
@@ -184,6 +185,27 @@ function relay(c,event){
  if(!c.ready){c.pending??=[];if(event.kind==='scroll')c.pending=c.pending.filter(x=>x.kind!=='scroll'||x.target.selector!==event.target.selector);if(c.pending.length<80)c.pending.push(event);return;}
  post(c,'apply',{event});
 }
+function relaySourceInteraction(event){
+ if(!$('sync').checked||!['scroll','click','input','key'].includes(event?.kind))return;
+ if(event.kind==='scroll'&&leader)return;
+ event.seq=++sequence;leader=null;lastAction=Date.now();
+ trace('desktop-interaction',null,{kind:event.kind,selector:event.target?.selector,sequence:event.seq});
+ cards.forEach(c=>relay(c,event));
+}
+function queueSourceInteraction(event){
+ if(!$('sync').checked||!watchingSource||sourceCandidate?.state!=='loading'||sessionSourceId!==sourceTabId||!['scroll','click','input','key'].includes(event?.kind))return;
+ try{if(new URL(normalizeURL(event.url)).origin!==preparedOrigin)return;}catch{return;}
+ if(event.kind==='scroll')pendingSourceEvents=pendingSourceEvents.filter(item=>item.event.kind!=='scroll'||item.event.target?.selector!==event.target?.selector);
+ if(pendingSourceEvents.length<80)pendingSourceEvents.push({token,sourceTabId:sessionSourceId,event});
+ else status('Часть действий основной вкладки не успела повториться во время загрузки. Проверьте экраны и выполните недостающие действия вручную.',true,'warning');
+}
+function flushSourceInteractions(){
+ const queued=pendingSourceEvents;pendingSourceEvents=[];
+ if(!sourceConnected||!running||!watchingSource||!following()||!$('sync').checked)return;
+ for(const item of queued){
+  if(item.token===token&&item.sourceTabId===sessionSourceId&&item.event.url?.split('#')[0]===desktopURL.split('#')[0])relaySourceInteraction(item.event);
+ }
+}
 function blank(c){
  clearTimeout(c.timeout);c.ready=false;c.view=null;c.divergence=0;
  const frame=document.createElement('iframe');frame.title=c.frame.title;frame.setAttribute('sandbox','');frame.style.cssText=c.frame.style.cssText;
@@ -234,7 +256,7 @@ window.addEventListener('message',e=>{
  if(e.data.type==='finding-focused'){if(e.data.inspectionId!==c.inspection?.id)return;c.inspection.feedback.textContent=e.data.ok?'Элемент подсвечен на экране на 4 секунды.':'Элемент изменился или больше недоступен. Запустите поиск ошибок вёрстки заново.';return;}
  if(e.data.type==='view-state'){c.view=e.data.state;c.viewAt=Date.now();return;}
  if(e.data.type==='sync-ack'){trace('applied',c,{kind:e.data.kind,sequence:e.data.eventId});return;}
- if(e.data.type==='intent'){leader=c;lastAction=Date.now();}
+ if(e.data.type==='intent'){pendingSourceEvents=[];leader=c;lastAction=Date.now();}
  if(e.data.type==='loading'){loading(c);}
  if(e.data.type==='route'){c.navigationHistory??=[];if(c.navigationHistory.at(-1)!==e.data.url)c.navigationHistory.push(e.data.url);c.pageurl.textContent=e.data.url;updateBrowserAddress(c,e.data.url);if($('check-404').checked)post(c,'http-status');if(auditing)post(c,'inspect-page');syncRoute(c,e.data.url);if($('sync').checked)updateAddress(c,e.data.url);}
  if(e.data.type==='ready'){syncRoute(c,e.data.url);c.navigationHistory??=[];if(c.navigationHistory.at(-1)!==e.data.url)c.navigationHistory.push(e.data.url);c.placeholder.classList.remove('unlinked');clearTimeout(c.timeout);c.ready=true;c.connectionFailed=false;c.placeholder.hidden=true;c.pageurl.textContent=e.data.url;updateBrowserAddress(c,e.data.url);c.pageurl.title=e.data.url;if($('sync').checked)updateAddress(c,e.data.url);c.state.textContent='Подключён';if($('check-404').checked)post(c,'http-status');if(auditing)post(c,'inspect-page');trace('ready',c);const pending=c.pending||[];c.pending=[];pending.forEach(event=>relay(c,event));updateSessionControls();if(cards.every(c=>c.ready))status(following()?'Все экраны подключены. Управляйте любым экраном, включая основную вкладку.':'Все экраны подключены. Управляйте любым телефоном — остальные повторят действия.');}
@@ -254,17 +276,18 @@ chrome.runtime.onMessage.addListener((msg,sender)=>{
  if(msg.type==='source-candidate'){queueSource(msg);return;}
  if(msg.type!=='desktop-source-event'||!running||msg.token!==token||!following())return;
  if(['ready','route','loading'].includes(msg.eventType)) {
+  if(msg.eventType==='loading')pendingSourceEvents=[];
   refreshSource().catch(error=>reportError(error,'sourceConnectFailed'));
   return;
  }
- if(!sourceConnected)return;
  const data=msg.payload||{};
+ if(!sourceConnected){if(msg.eventType==='interaction')queueSourceInteraction(data.event);return;}
  if(msg.eventType==='intent'){leader=null;lastAction=Date.now();return;}
  if(msg.eventType==='missing'){status(missingMessage('В основной вкладке',data),true,'warning');return;}
  if(msg.eventType==='sync-ack')return;
  if(['closed','domain-change'].includes(msg.eventType)){refreshSource().catch(error=>reportError(error,'sourceConnectFailed'));return;}
  if(msg.eventType==='blocked'){status(data.message);return;}
- if(msg.eventType==='interaction'&&$('sync').checked){const event=data.event;if(!['scroll','click','input','key'].includes(event?.kind))return;if(event.kind==='scroll'&&leader)return;event.seq=++sequence;leader=null;lastAction=Date.now();trace('desktop-interaction',null,{kind:event.kind,selector:event.target?.selector,sequence:event.seq});cards.forEach(c=>relay(c,event));}
+ if(msg.eventType==='interaction')relaySourceInteraction(data.event);
 });
 function rememberAddress(url){
  const query=new URLSearchParams({url});
@@ -278,6 +301,7 @@ function showSourceState(candidate){
  const previousState=sourceCandidate?.state;
  sourceCandidate=candidate;
  const state=candidate.state;
+ if(!['ready','loading'].includes(state)||(candidate.sourceTabId&&candidate.sourceTabId!==sessionSourceId))pendingSourceEvents=[];
  if(candidate.sourceWindowId)sourceWindowId=candidate.sourceWindowId;
  if(candidate.sourceTabId)sourceTabId=candidate.sourceTabId;
  const host=candidate.host||'';
@@ -337,7 +361,7 @@ async function connectScreens(url,candidate=null,revision=sourceRevision){
   sourceTabId:candidate?.sourceTabId||null,sourceWindowId:candidate?.sourceWindowId||null});
  if(result?.protocolVersion!==1)throw userError('extensionVersionMismatch');
  if(revision!==sourceRevision||(candidate&&(!following()||!watchingSource))){sourceConnected=false;sessionSourceId=null;return;}
- token=result.token;desktopURL=result.sourceURL||'';running=true;stoppedByUser=false;criticalIssue=false;leader=null;
+ pendingSourceEvents=[];token=result.token;desktopURL=result.sourceURL||'';running=true;stoppedByUser=false;criticalIssue=false;leader=null;
  preparedOrigin=new URL(url).origin;sourceConnected=!!candidate;sessionSourceId=candidate?.sourceTabId||null;
  if(candidate){sourceTabId=result.sourceTabId;sourceWindowId=result.sourceWindowId;}
  const actualURL=result.sourceURL||url;
@@ -367,6 +391,7 @@ async function drainSource(){
     if(!addressDirty){$('url').value=desktopURL;rememberAddress(desktopURL);}
     cards.forEach(c=>{if(c.pageurl.textContent!==desktopURL)setURL(c,desktopURL);});
     $('source-status').dataset.url=desktopURL;
+    flushSourceInteractions();
     continue;
    }
    const revision=sourceRevision;
@@ -394,6 +419,7 @@ async function watchSource(){
  queueSource(candidate);
 }
 async function unwatchSource(){
+ pendingSourceEvents=[];
  clearTimeout(sourceRecoveryTimer);
  watchingSource=false;sourceRevision++;pendingCandidate=null;sourceConnected=false;
  delete $('source-status').dataset.url;
@@ -463,7 +489,7 @@ $('count').addEventListener('change',()=>{
  build();
  if(running)cards.forEach((c,index)=>setURL(c,urls[index]||currentURL));
 });
-$('sync').addEventListener('change',()=>{savePreferences();if(!$('sync').checked)cards.forEach(c=>c.pending=[]);leader=null;if(running)send('set-sync',{enabled:$('sync').checked}).catch(e=>reportError(e,'syncFailed'));sourceHint();status($('sync').checked?'Повторение действий включено.':following()?'Повторение действий выключено. Экраны продолжают следовать адресу основной вкладки.':'Повторение действий выключено. Экраны работают независимо.');});
+$('sync').addEventListener('change',()=>{savePreferences();if(!$('sync').checked){pendingSourceEvents=[];cards.forEach(c=>c.pending=[]);}leader=null;if(running)send('set-sync',{enabled:$('sync').checked}).catch(e=>reportError(e,'syncFailed'));sourceHint();status($('sync').checked?'Повторение действий включено.':following()?'Повторение действий выключено. Экраны продолжают следовать адресу основной вкладки.':'Повторение действий выключено. Экраны работают независимо.');});
 $('compatibility').addEventListener('change',()=>{savePreferences();status('Нажмите «▶», чтобы применить режим встраивания.');});
 function calibrationDevice(){return DEVICES.find(d=>d.id===$('calibration-model').value)||DEVICES[0];}
 function measurementMM(){const d=calibrationDevice();return $('calibration-method').value==='phone'?d.diagonalInches*25.4*d.width/Math.hypot(d.width,d.height):50;}

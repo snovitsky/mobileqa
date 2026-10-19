@@ -118,6 +118,7 @@ await source.evaluate(()=>history.pushState(null,'','/paused'));await panel.wait
 await source.evaluate(()=>history.replaceState(null,'','/'));await panel.waitForFunction(()=>[...document.querySelectorAll('.pageurl')].every(e=>e.textContent.endsWith('/'))&&[...document.querySelectorAll('.device-status')].every(e=>e.textContent==='Подключён'));frames=panel.frames().filter(f=>f.url().startsWith(site));await panel.locator('#sync').check();
 // Return control to a phone, then to desktop, without rebroadcast loops.
 await panel.bringToFront();await frames[0].locator('#field').fill('Снова вместе');await source.waitForFunction(()=>document.querySelector('#field').value==='Снова вместе');
+await frames[0].locator('#field').press('ArrowLeft');
 await panel.waitForFunction(()=>document.querySelector('.device').classList.contains('controller'));
 const testPanelId=await panel.evaluate(async()=> (await chrome.tabs.getCurrent()).id);
 await worker.evaluate(async({sourceId,panelTabId})=>{
@@ -143,7 +144,54 @@ frames=panel.frames().filter(f=>f.url().startsWith(site));
 await worker.evaluate(()=>{chrome.scripting.executeScript=globalThis.originalDesktopInjection;delete globalThis.originalDesktopInjection;});
 console.log('PASS automatic reconnect without late injection; reverse phone/tablet input, nested scroll, password exclusion, bidirectional action pause with continued source URL following, mobile navigation and desktop takeover');
 await source.locator('#next').click();await panel.waitForFunction(()=>[...document.querySelectorAll('.pageurl')].every(e=>e.textContent.endsWith('/next')));await panel.waitForFunction(()=>[...document.querySelectorAll('.device-status')].every(x=>x.textContent==='Подключён'));
-try{await source.reload();await source.locator('#menu').click();await panel.waitForTimeout(300);frames=panel.frames().filter(f=>f.url().startsWith(site));assert((await Promise.all(frames.map(f=>f.locator('#result').textContent()))).every(x=>x==='Открыто'));}
+async function sourceCandidateState(state){
+ await worker.evaluate(async({sourceId,panelTabId,state})=>{
+  const tab=await chrome.tabs.get(sourceId);
+  await chrome.runtime.sendMessage({type:'source-candidate',panelTabId,state,sourceTabId:sourceId,sourceWindowId:tab.windowId,sourceURL:tab.url,host:new URL(tab.url).hostname});
+ },{sourceId,panelTabId:testPanelId,state});
+}
+async function holdSourceLoading(enabled){
+ await worker.evaluate(({sourceId,enabled})=>{
+  if(enabled){
+   const get=chrome.tabs.get.bind(chrome.tabs);globalThis.originalSourceTabsGet=chrome.tabs.get;
+   const query=chrome.tabs.query.bind(chrome.tabs);globalThis.originalSourceTabsQuery=chrome.tabs.query;
+   chrome.tabs.get=async id=>{const tab=await get(id);return id===sourceId?{...tab,status:'loading'}:tab;};
+   chrome.tabs.query=async options=>(await query(options)).map(tab=>tab.id===sourceId?{...tab,status:'loading'}:tab);
+  }else{
+   chrome.tabs.get=globalThis.originalSourceTabsGet;delete globalThis.originalSourceTabsGet;
+   chrome.tabs.query=globalThis.originalSourceTabsQuery;delete globalThis.originalSourceTabsQuery;
+  }
+ },{sourceId,enabled});
+}
+// Воспроизводим окно между готовностью DOM источника и подтверждением resolver.
+await panel.evaluate(()=>{window.desktopTrace=[];});
+await holdSourceLoading(true);
+await sourceCandidateState('loading');
+await panel.waitForFunction(()=>document.querySelector('#source-notice').dataset.state==='loading');
+await source.locator('#menu').click();
+await panel.waitForFunction(()=>window.desktopTrace.some(e=>e.type==='desktop-source-event'&&e.kind==='click'&&e.selector==='#menu'));
+await holdSourceLoading(false);
+await sourceCandidateState('ready');
+await Promise.all([0,1,2,3].map(index=>expect(panel.frameLocator('.screen iframe').nth(index).locator('#result')).toHaveText('Открыто',{timeout:5000})));
+for(const cancel of ['sync','unsupported']){
+ await Promise.all(panel.frames().filter(f=>f.url().startsWith(site)).map(f=>f.locator('#result').evaluate(el=>el.textContent='Закрыто')));
+ await panel.evaluate(()=>{window.desktopTrace=[];});
+ await holdSourceLoading(true);
+ await sourceCandidateState('loading');
+ await panel.waitForFunction(()=>document.querySelector('#source-notice').dataset.state==='loading');
+ await source.locator('#menu').click();
+ await panel.waitForFunction(()=>window.desktopTrace.some(e=>e.type==='desktop-source-event'&&e.kind==='click'&&e.selector==='#menu'));
+ if(cancel==='sync'){await panel.locator('#sync').uncheck();await panel.locator('#sync').check();}
+ else await sourceCandidateState('unsupported');
+ await holdSourceLoading(false);
+ await sourceCandidateState('ready');
+ await panel.waitForFunction(()=>document.querySelector('#source-notice').hidden&&document.querySelector('#source-status').dataset.url?.endsWith('/next'));
+ await panel.waitForTimeout(250);
+ for(const frame of panel.frames().filter(f=>f.url().startsWith(site)))assert.equal(await frame.locator('#result').textContent(),'Закрыто','Queued click must be discarded after '+cancel);
+}
+console.log('PASS first source click during resolver loading; queued actions discarded on Sync off and unsupported source');
+try{await source.reload();await source.locator('#menu').click();
+ await Promise.all([0,1,2,3].map(index=>expect(panel.frameLocator('.screen iframe').nth(index).locator('#result')).toHaveText('Открыто',{timeout:5000})));}
 catch(error){await navigationCheckpoint('SOURCE RELOAD FAILURE');throw error;}
 const opened=context.waitForEvent('page');await source.locator('#blank').click();const other=await opened;await other.waitForLoadState();assert.equal(source.url(),site+'/next');assert((await source.locator('#blank').getAttribute('target'))==='_blank');await other.bringToFront();await panel.waitForFunction(()=>[...document.querySelectorAll('.pageurl')].every(e=>e.textContent.endsWith('/new')));await other.close();await panel.waitForFunction(()=>[...document.querySelectorAll('.pageurl')].every(e=>e.textContent.endsWith('/next')));await source.bringToFront();
 await source.locator('#submit').click();await source.waitForURL('**/post');await panel.waitForFunction(()=>[...document.querySelectorAll('.pageurl')].every(e=>e.textContent.endsWith('/post')));assert.equal(posts,1);

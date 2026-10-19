@@ -76,3 +76,10 @@ access-revoked: worker → panel, {panelTabId,origins,sessionRevoked}. Отпр�
 inspect-page → page-findings дополнен inspectionId (номер сканирования в текущем document), viewport:{width,height}; findings:[{id,kind,selector,label,message}], максимум 200. kind: overflow/target/text; truncated отражает лимит результатов или обхода 10 000 элементов. Панель принимает только текущий iframe/token/URL.
 
 show-finding panel → bridge: {inspectionId,url,findingId}. Проходит существующий source/origin/token/ready guard. Bridge сверяет номер последнего сканирования, точный URL и сохранённый Element.isConnected/видимость. Произвольного CSS selector в этой команде нет. Ответ finding-focused:{url,inspectionId,ok}; при false панель предлагает пересканировать. Подсветка/прокрутка не являются replay, не пересылаются другим экранам и не нажимают элементы. protocolVersion остаётся 1; старые поля findings совместимы, новая подсветка требует актуального bridge.
+
+
+## Первое действие после reload: 2.6.18
+
+Runtime envelope/protocolVersion:1 не менялись. Panel получает проверенные background desktop-source-event с текущим token. Если текущая session ещё ожидает resolver (candidate loading, sessionSourceId совпадает с sourceTabId, origin события совпадает с preparedOrigin, Sync on), interaction временно попадает в pendingSourceEvents, максимум 80; scroll одного селектора объединяется. Ready resolver для той же session открывает/оставляет нужные iframe и выпускает события только с текущими token/sourceTabId и совпадающим URL без hash. До bridge ready они используют обычную очередь карточки. Loading события документа очищают прежнюю очередь. Stop/Main off/Sync off, отзыв доступа, смена token/источника, неподдерживаемый источник и управление из другого макета отменяют накопленные события. При переполнении есть предупреждение о ручной проверке. Ввод password/file и submit по-прежнему исключаются upstream.
+
+source-navigate сравнивает целевой URL с pendingUrl || url вкладки. Уже начатый переход к тому же адресу не запускается повторно через tabs.update; host/token/watch guards сохранены.

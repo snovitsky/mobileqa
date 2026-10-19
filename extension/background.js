@@ -187,7 +187,7 @@ chrome.runtime.onMessage.addListener((msg,sender,reply)=>{
    const tab=await sourceTab(s.sourceTabId,s.host);
    if(msg.type==='source-navigate'){
     const url=normalizeURL(msg.url);if(new URL(url).hostname!==s.host)throw userError('sourceDifferentSite');
-    if(tab.url!==url)try{await chrome.tabs.update(s.sourceTabId,{url});}catch{throw userError('sourceUnavailable');}
+    if((tab.pendingUrl||tab.url)!==url)try{await chrome.tabs.update(s.sourceTabId,{url});}catch{throw userError('sourceUnavailable');}
    }else try{await chrome.tabs.sendMessage(s.sourceTabId,{type:'source-apply',token:s.token,event:msg.event});}catch{throw userError('sourceConnectFailed');}
    return true;
   }

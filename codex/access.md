@@ -1,6 +1,6 @@
 # Разрешения и границы доступа
 
-Manifest 2.6.17: activeTab, tabs, storage, scripting, declarativeNetRequestWithHostAccess. tabs добавлено в 2.6.13 по явному согласованию пользователя для чтения URL текущих вкладок и следования выбранной вкладке рабочего окна. API полной истории посещений не используется; полная история не сохраняется. Optional host permissions остаются http://*/* и https://*/*: это доступные к запросу шаблоны, а не автоматически выданный доступ ко всем сайтам.
+Manifest 2.6.18: activeTab, tabs, storage, scripting, declarativeNetRequestWithHostAccess. tabs добавлено в 2.6.13 по явному согласованию пользователя для чтения URL текущих вкладок и следования выбранной вкладке рабочего окна. API полной истории посещений не используется; полная история не сохраняется. Optional host permissions остаются http://*/* и https://*/*: это доступные к запросу шаблоны, а не автоматически выданный доступ ко всем сайтам.
 
 Чтение URL через tabs не даёт права внедрять скрипты на любой сайт. Для нового домена panel запрашивает protocol://hostname/* по нажатию ▶ или «Разрешить доступ». Background отдельно проверяет permissions.contains перед prepare и navigate-source. Пассивное переключение вкладки не вызывает permission prompt. normalizeURL допускает только http/https без username/password.
 

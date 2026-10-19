@@ -6,7 +6,7 @@
 
 | Путь | Ответственность |
 |---|---|
-| `extension/manifest.json` | Версия 2.6.17, MV3, service worker module, действие значка, разрешения, PNG-иконки |
+| `extension/manifest.json` | Версия 2.6.18, MV3, service worker module, действие значка, разрешения, PNG-иконки |
 | `extension/background.js` | Открытие панели, подготовка сессии, очередь операций, host permissions, session DNR rules, регистрация bridge, источник и очистка |
 | `extension/panel.html` | Русский интерфейс и подключение panel.js как module |
 | `extension/panel.css` | Панель управления, карточки, оболочки устройств, масштабирование iframe, адаптация до 700 px |
