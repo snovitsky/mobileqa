@@ -4,7 +4,7 @@
 
 Node.js 22+, `npm ci`, затем `npx playwright install chromium` (Linux: при необходимости `--with-deps`). Это инструкции проекта, не перечень выполненных при обновлении документации действий. Runtime расширения не зависит от npm; devDependencies — Playwright 1.62.1 и fflate 0.8.3.
 
-Перед push: `npm test` и `npm run build`. Build сначала запускает check, затем scripts/build.cjs через fflate формирует `dist/brandmaker-qa-2.6.3.zip`. В ZIP 13 явно разрешённых файлов: 11 файлов приложения в extension/ (пять JS, panel.html/css, manifest и три иконки) и codex/user-guide.md, codex/device-sources.md. Справочники берутся из единственного исходного места codex/; остальные внутренние документы, AGENTS, tests, node_modules и рабочие файлы не упаковываются. Timestamps ZIP фиксированы датой 2020-01-01; это артефакт поставки, а не резервная копия.
+Перед push: `npm test` и `npm run build`. Build сначала запускает check, затем scripts/build.cjs через fflate формирует `dist/brandmaker-qa-2.6.16.zip`. В ZIP 19 явно разрешённых файлов: 17 файлов приложения в extension/ (одиннадцать JS, panel.html/css, manifest и три иконки) и codex/user-guide.md, codex/device-sources.md. В runtime включены responsive.js, error-notice.js, access-settings.js и url-display.js. Справочники берутся из единственного исходного места codex/; остальные внутренние документы, AGENTS, tests, node_modules и рабочие файлы не упаковываются. Timestamps ZIP фиксированы датой 2020-01-01; это артефакт поставки, а не резервная копия.
 
 ## GitHub Actions
 

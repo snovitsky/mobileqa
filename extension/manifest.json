@@ -1,11 +1,12 @@
 {
   "manifest_version": 3,
   "name": "Brandmaker QA",
-  "version": "2.6.9",
+  "version": "2.6.16",
   "description": "Основная вкладка и 3–5 синхронных мобильных экранов. Без интеграции с аналитикой.",
   "minimum_chrome_version": "118",
   "permissions": [
     "activeTab",
+    "tabs",
     "storage",
     "scripting",
     "declarativeNetRequestWithHostAccess"

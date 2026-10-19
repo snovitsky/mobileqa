@@ -1,3 +1,4 @@
+import { userError } from './errors.js';
 // width/height describe the full display rectangle; panel subtracts decorative status chrome from the website viewport.
 export const DEVICES = [
  {id:'iphone11',diagonalInches:6.06,name:'iPhone 11',width:414,height:896,dpr:2,platform:'iPhone'},
@@ -12,9 +13,13 @@ export const DEVICES = [
  {id:'iphonese',diagonalInches:4.7,name:'iPhone SE (2022)',width:375,height:667,dpr:2,platform:'iPhone'}
 ];
 export function normalizeURL(value) {
+ if(typeof value!=='string')throw userError('inputInvalid');
  const raw=value.trim();
- if(!raw) throw new Error('Введите адрес сайта.');
- const url=new URL(/^[a-z][a-z0-9+.-]*:/i.test(raw)?raw:'https://'+raw);
- if(!['http:','https:'].includes(url.protocol)||url.username||url.password) throw new Error('Нужен адрес http:// или https:// без пароля.');
+ if(!raw) throw userError('inputEmpty');
+ const hostWithPort=/^(?:localhost|[^\s/:]+\.[^\s/:]+):\d+(?:[/?#]|$)/i.test(raw);
+ const hasScheme=/^[a-z][a-z0-9+.-]*:/i.test(raw)&&!hostWithPort;
+ let url;try{url=new URL(hasScheme?raw:'https://'+raw);}catch{throw userError('inputInvalid');}
+ if(!['http:','https:'].includes(url.protocol))throw userError('inputUnsupported');
+ if(url.username||url.password)throw userError('inputCredentials');
  return url.href;
 }

@@ -1,13 +1,13 @@
 {
   "name": "brandmaker-qa",
-  "version": "2.6.9",
+  "version": "2.6.16",
   "private": true,
   "engines": {
     "node": ">=22"
   },
   "scripts": {
     "check": "node scripts/check.cjs",
-    "test": "npm run check && node tests/integration.cjs && node tests/desktop.cjs && node tests/physical-size.cjs && node tests/inspection.cjs",
+    "test": "npm run check && node tests/integration.cjs && node tests/desktop.cjs && node tests/physical-size.cjs && node tests/inspection.cjs && node tests/ui-regressions.cjs && node tests/preferences.cjs && node tests/errors.cjs && node tests/source-following.cjs && node tests/responsive.cjs && node tests/selection.cjs && node tests/pointer-boundary.cjs && node tests/error-notice.cjs && node tests/tablet-geometry.cjs && node tests/access-revocation.cjs && node tests/url-display.cjs",
     "test:integration": "node tests/integration.cjs",
     "test:desktop": "node tests/desktop.cjs",
     "build": "npm run check && node scripts/build.cjs",

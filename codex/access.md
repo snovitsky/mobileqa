@@ -1,19 +1,37 @@
 # Разрешения и границы доступа
 
-`extension/manifest.json`: activeTab, storage, scripting, declarativeNetRequestWithHostAccess. Optional host permissions: http://*/* и https://*/*; это доступные к запросу шаблоны, а не автоматический запрос ко всем сайтам при запуске.
+Manifest 2.6.16: activeTab, tabs, storage, scripting, declarativeNetRequestWithHostAccess. tabs добавлено в 2.6.13 по явному согласованию пользователя для чтения URL текущих вкладок и следования выбранной вкладке рабочего окна. API полной истории посещений не используется; полная история не сохраняется. Optional host permissions остаются http://*/* и https://*/*: это доступные к запросу шаблоны, а не автоматически выданный доступ ко всем сайтам.
 
-Полученный AGENTS.md запрещает расширение permissions/optional_host_permissions без явной инструкции пользователя; scripts/check.cjs проверяет точные массивы разрешений. Тесты меняют host_permissions только в временной fixture-копии расширения для loopback, не в исходном manifest. Доступы иных проектов использовать нельзя.
+Чтение URL через tabs не даёт права внедрять скрипты на любой сайт. Для нового домена panel запрашивает protocol://hostname/* по нажатию ▶ или «Разрешить доступ». Background отдельно проверяет permissions.contains перед prepare и navigate-source. Пассивное переключение вкладки не вызывает permission prompt. normalizeURL допускает только http/https без username/password.
 
-Panel запрашивает protocol://hostname/* после пользовательского Показать. При уже выданном доступе auto-start не выводит prompt. Background ещё раз проверяет permissions.contains. normalizeURL отклоняет протоколы кроме http/https и username/password в URL.
+AGENTS запрещает другие расширения permissions без явной инструкции. scripts/check.cjs проверяет согласованный массив; тестовые host_permissions для loopback меняются только во временной fixture-копии. Доступы других проектов использовать нельзя.
 
 ## Скрипты и сессии
 
-Background регистрирует bridge на match выбранного host: allFrames true, document_start, persistAcrossSessions false. Bridge выходит в обычном top frame; handshake активирует его в iframe панели только при session, host и frameId > 0. Source внедряется executeScript в frame 0 выбранной основной вкладки; marker препятствует повторной установке listeners, source-config обновляет token.
+Background регистрирует bridge.js/desktop-source.js на разрешённом match с allFrames, document_start и persistAcrossSessions:false. Bridge покидает обычный top frame; desktop-source покидает iframe. Handshake разрешает работу только для подходящей session/tab/frame/host. Поздняя инъекция desktop-source остаётся запасным подключением.
 
-Token генерируется crypto.randomUUID; хранится в storage.session и передаётся content scripts. Runtime проверяет extension sender и контекст вкладки; postMessage ограничивается token/source и parentOrigin на стороне bridge. Это контекстная проверка сообщений, не система пользовательской авторизации. Ролей, аккаунтов расширения, OAuth или отдельной модели доступа нет.
+Token crypto.randomUUID хранится в storage.session. Panel-команды требуют extension sender, frame 0 и URL panel.html. Source-сообщения дополнительно проверяют источник, host, token и allowlist событий. Panel проверяет panelTabId, текущий token, режим и подключение источника; сообщения iframe — token и соответствующий contentWindow. Это контекстные guards, не модель пользовательских ролей. Resolve/prepare объявляют protocolVersion:1; несовместимая версия требует обновить расширение и заново открыть панель.
 
-## Совместимость встраивания
+sourceWatches хранят только текущие ID источника/рабочего окна. Следование ограничено одним normal-окном; панель не выбирается источником, другие окна не перехватываются. Закрытое наблюдаемое окно даёт unavailable; восстановление первоначальной панели со старыми ID рассматривается отдельно и выбирает подходящий сайт того же доступного normal-окна. Ожидаемая недоступность адреса/сайта и отсутствие host access возвращаются нейтральными candidate-состояниями.
 
-DNR session rule удаляет x-frame-options, content-security-policy и content-security-policy-report-only только для sub_frame ответов requestDomains выбранного host в panel tab. В ordinary tabs правило не применяется. Полная CSP содержит больше ограничений, чем запрет iframe; результат требует отдельного подтверждения в обычном браузере.
+Локальная cancel-pointer от panel к bridge проходит существующий source/origin/token/ready guard. Она отменяет жест в одном iframe, не передаёт новые данные и не расширяет разрешения; обычное выделение текста удалённого сайта сохраняется.
 
-cleanup удаляет подходящие session rules, session state и посылает source-stop. Permissions не отзываются; registered content scripts не удаляются. Site cookies, login и политика third-party frames управляются Chrome/сайтом; одна панель не предоставляет изоляцию сессии каждого устройства.
+## Встраивание и очистка
+
+DNR снимает всю CSP, CSP-report-only и X-Frame-Options только для sub_frame ответов requestDomains выбранного host в panel tab. Это меняет больше условий, чем запрет iframe; обычные вкладки правило не затрагивает.
+
+Prepare проверяет доступ и источник перед заменой сессии; изменение session rules атомарно, при неудачной конфигурации восстанавливается прежнее состояние. Cleanup удаляет session/rules. Watch управляется отдельно: явный Stop выключает watch и очищает сессию, закрытие панели удаляет оба. При Stop ранее выданные permissions не отзываются, registered scripts остаются до конца браузерной сессии; явный отзыв отдельно описан ниже. Общий источник с несколькими панелями ограничен одним token desktop-source; остановка панели не должна гасить оставшуюся.
+
+Cookies, авторизация и third-party frames управляются Chrome и сайтом; отдельной изоляции профиля для каждого устройства нет.
+
+## Явный отзыв доступа 2.6.15
+
+Настройки → «Доступ к сайтам» показывает точные HTTP/HTTPS patterns, возвращённые permissions.getAll; обязательные host permissions не предлагаются для удаления. Кнопка «Отозвать» вызывает permissions.remove только по нажатию. Проект новых permissions не добавляет, список не копируется в storage. HTTP и HTTPS отображаются отдельно, wildcard-шаблон сохраняется явно.
+
+Background слушает permissions.onRemoved и для каждой session заново проверяет contains(permissionMatch). При фактической утрате доступа удаляет session/token/DNR, выключает источник и unregister регистрации скриптов без разрешения. Панели получают access-revoked с sessionRevoked, очищают встроенные документы и отменяют поздние операции; watch остаётся и возвращает needs-access. Отзыв через Chrome обрабатывается тем же путём. Если другой grant продолжает покрывать сайт, сеанс не останавливается. Старые sessions без permissionMatch обрабатываются консервативно по отозванному scope.
+
+Stop по-прежнему только останавливает сеанс; он не равен отзыву разрешений. Отзыв не очищает cookies, данные сайта или обычную вкладку. Повторный доступ выдаётся штатным запросом Chrome по ▶/кнопке разрешения.
+
+Читаемое Unicode-представление hostname используется только в списке/доступной подписи кнопки; ASCII pattern остаётся источником операции remove и показан в title. Отображение не доказывает подлинность сайта и не меняет выданный scope.
+
+Для совместимой старой загруженной версии worker панель также слушает onRemoved и после успешного remove перепроверяет свой текущий exact permission: при утрате blank/token invalidation + stop. UI регрессия проверяет этот путь без нового broadcast. Рекомендация обновить версию не запрещает работу; реальная недоступность Chrome API или несовместимый протокол остаются отдельной ошибкой.

@@ -26,11 +26,14 @@
   if(t.id){const e=document.getElementById(t.id);if(visible(e)&&e.localName===t.tag)return e;}
   if(t.control){const control=find(t.control);if(control)return control;}
   const pool=t.tag?[...document.getElementsByTagName(t.tag)].filter(visible):[];
-  if(t.anchor&&!['#','javascript:void(0)','javascript:void(0);'].includes(t.anchor)){
-   const anchored=pool.filter(e=>e.closest('a[href]')?.getAttribute('href')===t.anchor);
-   if(anchored.length){const score=e=>{const r=e.getBoundingClientRect();const area=Math.max(0,Math.min(r.right,innerWidth)-Math.max(r.left,0))*Math.max(0,Math.min(r.bottom,innerHeight)-Math.max(r.top,0));return area/Math.max(1,r.width*r.height)+(e.closest('.swiper-slide-active')?2:0);};anchored.sort((a,b)=>score(b)-score(a));return anchored[0];}
-  }
   const compatible=e=>(!t.image||imageKey(e)===t.image)&&(!t.href||e.getAttribute('href')===t.href)&&(!t.name||e.getAttribute('name')===t.name)&&(!t.label||e.getAttribute('aria-label')===t.label)&&(!t.text||e.textContent?.trim().slice(0,160)===t.text);
+  if(t.anchor&&!['#','javascript:void(0)','javascript:void(0);'].includes(t.anchor)){
+   let anchored=pool.filter(e=>e.closest('a[href]')?.getAttribute('href')===t.anchor&&compatible(e));
+   if(t.classes?.length){const matches=anchored.filter(e=>t.classes.every(x=>e.classList.contains(x)));if(matches.length)anchored=matches;}
+   if(anchored.length===1)return anchored[0];
+   if(anchored.length>1){const score=e=>{const r=e.getBoundingClientRect();const area=Math.max(0,Math.min(r.right,innerWidth)-Math.max(r.left,0))*Math.max(0,Math.min(r.bottom,innerHeight)-Math.max(r.top,0));return area/Math.max(1,r.width*r.height)+(e.closest('.swiper-slide-active')?2:0);};anchored.sort((a,b)=>score(b)-score(a));return score(anchored[0])-score(anchored[1])>0.001?anchored[0]:null;}
+   return null;
+  }
   try{const e=document.querySelector(t.selector);if(visible(e)&&e.localName===t.tag&&compatible(e))return e;}catch{}
   const candidates=pool.filter(compatible);
   if(t.image||t.name||t.label||t.text||(t.href&&!['#','javascript:void(0)','javascript:void(0);'].includes(t.href))){if(candidates.length===1)return candidates[0];}
@@ -46,7 +49,7 @@
   const el=e.target;
   if(el.closest('a[href]')?.target==='_blank')return;
   // Controls with side effects are not replayed on the other screens.
-  if(canSubmit(el)){send('blocked',{message:'Отправка формы выполняется только на этом экране.'});return;}
+  if(canSubmit(el)){send('blocked',{message:'Кнопка отправки формы нажата только на управляющем экране. Её нажатие не повторяется на остальных экранах.'});return;}
   if(el.matches('input,textarea,select,[contenteditable]'))return;
   const a=el.closest('a');if(a&&/^(tel:|mailto:|sms:|javascript:)/i.test(a.getAttribute('href')||''))return;
   send('interaction',{event:{kind:'click',target:describe(el),url:location.href}});
@@ -66,9 +69,9 @@
  document.addEventListener('submit',e=>{if(replaying||Date.now()<mutedUntil){e.preventDefault();e.stopImmediatePropagation();}},true);
  function apply(event){
 const ev=event;if(!ev||!['scroll','click','input','key'].includes(ev.kind))return;
-  if(ev.url&&ev.url.split('#')[0]!==location.href.split('#')[0]){send('missing',{eventId:ev.seq,message:'На экранах открыты разные адреса. Нажмите «Показать» для выравнивания.'});return;}
+  if(ev.url&&ev.url.split('#')[0]!==location.href.split('#')[0]){send('missing',{eventId:ev.seq,kind:ev.kind,reason:'different-page',message:'На экранах открыты разные страницы. Откройте одинаковую страницу или нажмите «Показать» заново.'});return;}
   if(ev.kind==='key'){if(ev.key==='Escape'){document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',code:'Escape',keyCode:27,which:27,bubbles:true}));document.dispatchEvent(new KeyboardEvent('keyup',{key:'Escape',code:'Escape',keyCode:27,which:27,bubbles:true}));}return;}
-  const el=find(ev.target||{});if(!el){send('missing',{eventId:ev.seq,message:'Элемент не найден в этой версии страницы.'});return;}
+  const el=find(ev.target||{});if(!el){send('missing',{eventId:ev.seq,kind:ev.kind,reason:'element-missing',message:'Элемент не найден в этой версии страницы. Выполните действие в основной вкладке вручную.'});return;}
   mutedUntil=Date.now()+400;
   try{
    if(ev.kind==='scroll'){
@@ -88,11 +91,17 @@ const ev=event;if(!ev||!['scroll','click','input','key'].includes(ev.kind))retur
     replaying=true;el.dispatchEvent(new Event('input',{bubbles:true}));el.dispatchEvent(new Event('change',{bubbles:true}));replaying=false;
    }
   send('sync-ack',{eventId:ev.seq,kind:ev.kind});
-  }catch{replaying=false;send('missing',{eventId:ev.seq,message:'Этот элемент не поддерживает синхронизацию.'});}
+  }catch{replaying=false;send('missing',{eventId:ev.seq,kind:ev.kind,reason:'apply-failed',message:'Не удалось повторить действие в основной вкладке. Проверьте результат и при необходимости выполните действие вручную.'});}
  }
  function announce(){send('ready',{url:location.href});const el=document.scrollingElement;if(!el)return;send('interaction',{event:{kind:'scroll',target:{selector:':root'},x:el.scrollLeft/Math.max(1,el.scrollWidth-el.clientWidth),y:el.scrollTop/Math.max(1,el.scrollHeight-el.clientHeight)}});}
- chrome.runtime.onMessage.addListener((msg,sender)=>{if(sender.id!==chrome.runtime.id)return;if(msg.type==='source-apply'&&readySent&&msg.token===token){apply(msg.event);return;}if(msg.type==='source-stop'){readySent=false;token='';}if(msg.type==='source-config'){token=msg.token;readySent=true;announce();}});
- chrome.runtime.sendMessage({type:'source-hello'}).then(r=>{if(r?.enabled){token=r.token;readySent=true;announce();}}).catch(()=>{});
+ function connect(sourceToken){
+  token=sourceToken;
+  const loaded=()=>{if(!token||token!==sourceToken)return;readySent=true;announce();};
+  // На document_start дерево страницы ещё не готово для повторения действий.
+  if(document.readyState==='loading'){readySent=false;document.addEventListener('DOMContentLoaded',loaded,{once:true});}else loaded();
+ }
+ chrome.runtime.onMessage.addListener((msg,sender)=>{if(sender.id!==chrome.runtime.id)return;if(msg.type==='source-apply'&&readySent&&msg.token===token){apply(msg.event);return;}if(msg.type==='source-stop'){readySent=false;token='';}if(msg.type==='source-config')connect(msg.token);});
+ chrome.runtime.sendMessage({type:'source-hello'}).then(r=>{if(r?.enabled)connect(r.token);}).catch(()=>{});
  window.addEventListener('beforeunload',()=>send('loading'));
  let lastURL=location.href;setInterval(()=>{if(readySent&&lastURL!==location.href){lastURL=location.href;send('route',{url:lastURL});}},250);
 })();

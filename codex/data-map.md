@@ -1,32 +1,43 @@
 # Данные и хранение
 
-Серверной БД, ORM и миграций нет. Optional feature database используется для описания browser storage и локального состояния.
+Серверной БД, ORM и миграций нет. Feature database описывает browser storage и память панели.
 
 | Место | Схема | Жизненный цикл |
 |---|---|---|
-| chrome.storage.local | preferences: count (строка), compatibility (boolean), devices (массив id) | Сохраняется при смене count/compatibility/model, восстанавливается panel |
-| chrome.storage.session | panels: объект tabId → `{host,token,sourceTabId,syncEnabled}` | Background загружает в Map при старте worker, persist после prepare/cleanup |
-| DNR session rules | id, modifyHeaders action, condition tabIds/requestDomains/sub_frame | Добавляется prepare compatibility, удаляется cleanup |
-| Память panel | cards, leader, token, running, pending events, navigationHistory, view state | Не постоянное хранилище; обновляется при ready/interaction/snapshot |
-| Память panel | diagnostics, до 200 записей | Последовательный scroll одного устройства сворачивается; сброс при новой загрузке panel |
-| Query panel | url и source | Меняется через history.replaceState; виден в URL extension page |
+| storage.local | preferences: count/scale, sync/followSource/compatibility, devices, landscapes, responsiveSizes, responsiveScales, check404, browserMode | Автосохранение пользовательских настроек, восстановление до запуска |
+| storage.local | displayCalibration: {pxPerMM,dpr} | Калибровка монитора, сохраняется отдельно от preferences |
+| storage.session | panels: tabId → {host,permissionMatch,token,sourceTabId,sourceWindowId,syncEnabled} | Рабочие сессии worker; prepare/cleanup обновляют Map и storage |
+| storage.session | sourceWatches: panelTabId → {sourceTabId,sourceWindowId} | Следование выбранному рабочему окну; независимо от panels, выключается watch-source false/закрытием панели |
+| DNR session rules | id, modifyHeaders, tabIds/requestDomains/sub_frame | Замена при prepare, удаление cleanup |
+| Память panel | cards, leader, token, очередь событий, navigationHistory, snapshots, candidate/revision | Пересоздаётся при загрузке панели |
+| Память panel | diagnostics, до 200 событий | До закрытия/обновления панели, экспорт только по кнопке |
+| Память error-notice | lastMessage, occurrences, время последнего показа | Счётчик одинаковых видимых сообщений; clear/dismiss сбрасывают, диагностика сохраняется |
+| Query panel | url, source, sourceWindow | Текущий адрес и подсказки выбора; меняется history.replaceState |
 
-scale, orientation, sync и follow-source не сохраняются как preferences. Формы сайта и cookies относятся к загруженным сайтам и профилю Chrome; расширение не создаёт отдельный профиль на устройство.
+## Настройки экранов
+
+count: 3/4/5; scale: auto/css/0.5/0.75/1; sync/followSource — строгие boolean. Отсутствующие значения используют defaults; незнакомые поля preferences сохраняются. devices[i] задаёт профиль позиции, landscapes[i] — boolean ориентации. responsiveSizes[i] содержит канонические {width,height} от 240 до 3840 CSS px для собственного viewport; массив сохраняется вместе с моделями. Поворот меняет отображаемую ориентацию, не теряет исходные размеры. Drag ручки обновляет память/отображение без записи storage на каждом движении и сохраняет изменённый размер один раз по завершении; клавиатурный шаг сохраняется сразу. Числовых полей ширины/высоты нет, .dimensions показывает текущее значение. После уменьшения количества сохраняются текущие позиции, как и модели.
+
+browserMode: expanded/collapsed, прежнее none читается как expanded. check404 по умолчанию false. Настройки восстанавливаются до автозапуска после перезапуска Chrome в том же профиле; удаление расширения/профиля может их удалить.
+
+Физический масштаб восстанавливается только при корректной displayCalibration; иначе используется auto без диалога. Калибровка pxPerMM допускает 1–16, dpr > 0; отмена не заменяет подтверждённый масштаб. Собственный responsive-профиль не имеет диагонали и использует CSS 1:1 при выборе физического масштаба. Калибровка не меняет его размеры.
+
+## Источник и история
+
+followSource сохраняет режим, а не постоянную идентичность вкладки. Query/sourceWatches содержат текущие ID и служат подсказками: resolver заново проверяет вкладку и normal-окно. При первичном восстановлении с исчезнувшими ID допускается выбор последнего normal-окна; если активна сама панель, среди сайтов того же окна используются lastAccessed либо близость index. Уже наблюдаемое закрытое окно возвращает unavailable, чужое окно не подменяет его.
+
+tabs даёт адреса текущих вкладок, но chrome.history не используется. Полная история посещённых сайтов не сохраняется. Текущий адрес остаётся в query панели; локальная navigationHistory относится только к карточкам текущего сеанса.
 
 ## Диагностика
 
-Пользовательская кнопка создаёт JSON через Blob/download: version, sync, devices `{model,url,state}`, events. Запись события содержит time,type,device,url и метаданные: kind,selector,sequence,message либо признаки divergence. Значения input намеренно не передаются в trace. В оперативных сообщениях replay значения присутствуют; password в bridge не исключён, см. [risk-zones.md](risk-zones.md).
+JSON содержит version, sync, devices {model,url,state}, последние события с time/type/device/url и kind/selector/sequence/message/code либо divergence. Последовательные scroll сворачиваются. Значения input в trace не записываются; в оперативном replay присутствуют значения обычных полей, password/file исключены.
 
-Отчёт не сохраняется автоматически на сервер; сетевого endpoint диагностики в коде нет. URL не очищается от query/hash и может содержать чувствительные параметры. Документация не хранит примеры реальных credentials/token values.
+missing в оперативном канале содержит kind/reason/eventId/message; reason описывает element-missing, different-page или apply-failed. Крестик сообщения и сброс его видимого счётчика не очищают diagnostics. Полная история сообщений на диск автоматически не записывается; время/счётчик уведомления живут только в текущей панели.
 
-## displayCalibration
+Серьёзность уведомления и состояние приложения хранятся/вычисляются отдельно в памяти панели. Предупреждение missing не меняет работающий сеанс на остановленный. #session-state доступен экранному диктору через sr-only, видимые текстовые подписи сеанса не выводятся.
 
-chrome.storage.local хранит отдельный ключ displayCalibration: {pxPerMM,dpr}. pxPerMM — CSS-длина полоски / 50 mm, допустимый диапазон 1–16; dpr — devicePixelRatio при калибровке. Значения проверяются при чтении. Пароли, сайты и учётные данные отсутствуют. Настройка сохраняется между открытиями панели; для другого физического монитора пользователь должен повторить калибровку. Она не входит в preferences и не передаётся на сервер.
+URL не очищаются от query/hash и могут быть чувствительными. Отчёт создаётся по кнопке Blob/download без внешнего endpoint. Формы, cookies и авторизация принадлежат сайтам и профилю Chrome; расширение не создаёт отдельный профиль устройства. Статусы HTTP, DOM-замечания, QR и snapshots живут в памяти панели.
 
-preferences.check404 — boolean, false по умолчанию. Результаты вёрстки, статусы документов, активный экран и QR живут только в панели; внешние сервисы не используются.
+Состояния ready/connectionFailed карточек и таймер восстановления loading живут только в памяти панели. permissionMatch хранит точный запрошенный scheme://hostname/* для повторной проверки разрешений после отзыва. Для старых sessions без этого поля используется консервативный fallback по отозванному шаблону; новый prepare записывает поле. Список выданных доступов берётся непосредственно из Chrome permissions.getAll, отдельной копии в storage.local нет.
 
-preferences.browserMode: expanded/collapsed/none, expanded по умолчанию; хранится локально вместе с другими настройками.
-
-## 2.6.6 — Настройки панелей и ширина шапки
-
-Режим «Только сайт» удалён. Панели по умолчанию развёрнуты; доступны expanded/collapsed, старое сохранённое none заменяется expanded при чтении. Верхняя шапка занимает полную ширину окна, адресный ввод получает оставшееся место. На узких окнах остаётся горизонтальная прокрутка одной строки.
+2.6.16: preferences.responsiveScales[i] хранит null или ratio 0.01..2 для позиции экрана. Отсутствующее/некорректное значение читается как null. Значение сохраняется при редактировании, rebuild и reload; у аппаратного профиля не применяется. Строка размеров создаёт временный редактор по клику; черновик не сохраняется до подтверждения.
