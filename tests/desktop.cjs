@@ -41,12 +41,23 @@ async function clickMatching(driver){
  const target=driver.locator('#matching span').nth(1);
  if(driver===source)await target.click();
  else{
-  // Playwright locator coordinates do not include this OOPIF's density/transform compensation.
-  const outer=await (await driver.frameElement()).boundingBox();
-  const inner=await target.evaluate(el=>{const r=el.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2,w:innerWidth};});
-  await panel.mouse.click(outer.x+inner.x*outer.width/inner.w,outer.y+inner.y*outer.width/inner.w);
+  // Координаты OOPIF пересчитываем вручную, но сначала выводим цель из-под sticky-шапки.
+  await target.scrollIntoViewIfNeeded();
+  const frameElement=await driver.frameElement();
+  await frameElement.evaluate(el=>{
+   const header=document.querySelector('.app-header').getBoundingClientRect();
+   scrollBy({top:el.getBoundingClientRect().top-header.bottom-30,behavior:'instant'});
+  });
+  await panel.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+  const outer=await frameElement.boundingBox();
+  const inner=await target.evaluate(el=>{const r=el.getBoundingClientRect(),x=r.x+r.width/2,y=r.y+r.height/2;return {x,y,w:innerWidth,hit:el.contains(document.elementFromPoint(x,y))};});
+  assert(inner.hit,'Matching target must be visible inside the iframe: '+JSON.stringify(inner));
+  const point={x:outer.x+inner.x*outer.width/inner.w,y:outer.y+inner.y*outer.width/inner.w};
+  const exposed=await frameElement.evaluate((el,p)=>document.elementFromPoint(p.x,p.y)===el,point);
+  assert(exposed,'Matching target must not be outside the panel viewport or behind its header: '+JSON.stringify({point,outer,inner}));
+  await panel.mouse.click(point.x,point.y);
  }
- assert(await driver.evaluate(()=>window.matchingClicks.some(event=>event.trusted&&event.tag==='span'&&event.action==='second')),'Matching regression must click the intended span with a trusted pointer event');
+ assert(await driver.evaluate(()=>window.matchingClicks.some(event=>event.trusted&&event.tag==='span'&&event.action==='second')),'Matching regression must click the intended span with a trusted pointer event: '+JSON.stringify({driver:driver===source?'desktop':'phone',clicks:await driver.evaluate(()=>window.matchingClicks),panelScroll:await panel.evaluate(()=>scrollY)}));
 }
 for(const driver of [source,frames[0]]){
  await installMatching();if(driver===source)await source.bringToFront();else await panel.bringToFront();
@@ -55,6 +66,7 @@ for(const driver of [source,frames[0]]){
   catch(error){console.log('MATCHING FAILURE',JSON.stringify({driver:driver===source?'desktop':'phone',notice:await panel.locator('#error-notice').textContent(),sourceStatus:await panel.locator('#source-status').textContent(),worlds:await Promise.all(worlds.map(world=>world.evaluate(()=>({url:location.href,result:document.querySelector('#match-result')?.textContent,clicks:window.matchingClicks,scrollY,spans:[...document.querySelectorAll('#matching span')].map(el=>{const r=el.getBoundingClientRect();return {text:el.textContent,rect:{x:r.x,y:r.y,width:r.width,height:r.height},visibility:getComputedStyle(el).visibility};})}))))}));throw error;}
  await installMatching(true);if(await panel.locator('#error-dismiss').isVisible())await panel.locator('#error-dismiss').click();
  if(driver===source)await source.bringToFront();else await panel.bringToFront();
+ if(driver!==source)await panel.evaluate(()=>scrollTo(0,document.body.scrollHeight));
  await clickMatching(driver);
  await panel.waitForFunction(()=>!document.querySelector('#error-notice').hidden);
  assert.equal(await driver.locator('#match-result').textContent(),'second');

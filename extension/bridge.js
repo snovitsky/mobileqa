@@ -21,6 +21,46 @@
  }
  function describe(el){const control=el.closest('button,[role="button"]');return {control:control&&control!==el?describe(control):null,selector:path(el),tag:el.localName,id:el.id,name:el.getAttribute('name'),href:el.getAttribute('href'),label:el.getAttribute('aria-label'),text:el.textContent?.trim().slice(0,160),image:imageKey(el),anchor:el.closest('a[href]')?.getAttribute('href'),classes:[...el.classList].filter(x=>!/(active|selected|current|open)/i.test(x))};}
  function visible(el){return el&&!!el.getClientRects().length&&getComputedStyle(el).visibility!=='hidden';}
+ let inspectionId=0,inspectionURL='',inspectionElements=new Map(),inspectionHighlight,highlightTimer;
+ function clearInspectionHighlight(){clearTimeout(highlightTimer);inspectionHighlight?.remove();inspectionHighlight=null;}
+ function inspectPage(){
+  clearInspectionHighlight();inspectionElements=new Map();inspectionURL=location.href;inspectionId++;
+  const findings=[];let omitted=false;
+  const add=(kind,el,message)=>{
+   if(findings.length>=200){omitted=true;return;}
+   const id=String(findings.length+1),tag=el.localName;
+   const text=(el.getAttribute('aria-label')||el.getAttribute('alt')||(['input','textarea','select'].includes(tag)?el.getAttribute('placeholder'):el.textContent)||'').replace(/\s+/g,' ').trim().slice(0,100);
+   const name={button:'Кнопка',a:'Ссылка',input:'Поле',textarea:'Поле',select:'Список',img:'Изображение',html:'Страница'}[tag]||'Элемент '+tag;
+   inspectionElements.set(id,el);findings.push({id,kind,selector:path(el),label:text?`${name} «${text}»`:name,message});
+  };
+  const root=document.documentElement;
+  if(root.scrollWidth>innerWidth+2)add('overflow',root,`Страница шире экрана на ${root.scrollWidth-innerWidth} CSS px. Проверьте, нужна ли горизонтальная прокрутка.`);
+  let visited=0;for(const el of document.querySelectorAll('body *')){
+   if(++visited>10000)break;
+   const r=el.getBoundingClientRect(),style=getComputedStyle(el);
+   if(!r.width||!r.height||style.visibility==='hidden'||style.display==='none'||el.closest('[aria-hidden="true"]'))continue;
+   if(r.right>innerWidth+2&&r.left>=0&&style.position!=='fixed')add('overflow',el,'Элемент выходит за правый край экрана. Проверьте, доступно ли его содержимое.');
+   if(el.matches('button,a[href],input:not([type=hidden]),select,textarea,[role=button]')&&(r.width<24||r.height<24))add('target',el,`Маленькая область нажатия: ${Math.round(r.width)} × ${Math.round(r.height)} CSS px, одна из сторон меньше 24. Проверьте, удобно ли нажимать пальцем.`);
+   if([...el.childNodes].some(n=>n.nodeType===3&&n.textContent.trim())&&parseFloat(style.fontSize)<12)add('text',el,`Мелкий текст: ${style.fontSize}, меньше 12 px. Проверьте, удобно ли его читать.`);
+  }
+  send('page-findings',{url:inspectionURL,inspectionId,viewport:{width:innerWidth,height:innerHeight},findings,truncated:omitted||visited>10000});
+ }
+ function showInspectionFinding(data){
+  clearInspectionHighlight();
+  const el=data.inspectionId===inspectionId&&data.url===inspectionURL&&location.href===inspectionURL?inspectionElements.get(data.findingId):null;
+  if(!el?.isConnected||!visible(el)){send('finding-focused',{url:location.href,inspectionId:data.inspectionId,ok:false});return;}
+  mutedUntil=Date.now()+800;cancelAnimationFrame(scrollFrame);
+  el.scrollIntoView({block:'center',inline:'nearest',behavior:'instant'});
+  const host=document.createElement('div');
+  host.style.cssText='all:initial!important;position:fixed!important;inset:0!important;pointer-events:none!important;z-index:2147483647!important;';
+  const shadow=host.attachShadow({mode:'closed'}),box=document.createElement('div');
+  box.style.cssText='position:fixed;box-sizing:border-box;border:3px solid #e59516;background:#ffbf331f;pointer-events:none;';shadow.append(box);
+  document.documentElement.append(host);inspectionHighlight=host;
+  const draw=()=>{if(inspectionHighlight!==host)return;const r=el.getBoundingClientRect();Object.assign(box.style,{left:r.left+'px',top:r.top+'px',width:r.width+'px',height:r.height+'px'});};
+  draw();const follow=()=>{draw();if(inspectionHighlight===host)requestAnimationFrame(follow);};requestAnimationFrame(follow);
+  highlightTimer=setTimeout(clearInspectionHighlight,4000);
+  send('finding-focused',{url:location.href,inspectionId,ok:true});
+ }
  function find(t){
   if(t.selector===':root')return document.scrollingElement;
   if(t.id){const e=document.getElementById(t.id);if(visible(e)&&e.localName===t.tag)return e;}
@@ -109,16 +149,9 @@
  window.addEventListener('message',e=>{
   if(e.source!==window.parent||e.origin!==parentOrigin||e.data?.app!==prefix||e.data.token!==token||!readySent)return;
   if(e.data.type==='cancel-pointer'){cancelPointers();return;}
+  if(e.data.type==='show-finding'){showInspectionFinding(e.data);return;}
   if(e.data.type==='inspect-page'){
-   const findings=[];const add=(kind,el,message)=>{if(findings.length<80)findings.push({kind,selector:describe(el).selector,message});};
-   const root=document.documentElement;
-   if(root.scrollWidth>innerWidth+2)add('overflow',root,`Страница шире экрана на ${root.scrollWidth-innerWidth} CSS px. Проверьте, нужна ли горизонтальная прокрутка.`);
-   let visited=0;for(const el of document.querySelectorAll('body *')){if(++visited>10000)break;const r=el.getBoundingClientRect(),style=getComputedStyle(el);if(!r.width||!r.height||style.visibility==='hidden'||style.display==='none'||el.closest('[aria-hidden="true"]'))continue;
-    if(r.right>innerWidth+2&&r.left>=0&&style.position!=='fixed')add('overflow',el,'Элемент выходит за правый край экрана. Проверьте, доступно ли его содержимое.');
-    if(el.matches('button,a[href],input:not([type=hidden]),select,textarea,[role=button]')&&(r.width<24||r.height<24))add('target',el,`Маленькая область нажатия: ${Math.round(r.width)} × ${Math.round(r.height)} CSS px, одна из сторон меньше 24. Проверьте, удобно ли нажимать пальцем.`);
-    if([...el.childNodes].some(n=>n.nodeType===3&&n.textContent.trim())&&parseFloat(style.fontSize)<12)add('text',el,`Мелкий текст: ${style.fontSize}, меньше 12 px. Проверьте, удобно ли его читать.`);
-   }
-   send('page-findings',{url:location.href,findings,truncated:visited>10000||findings.length>=80});return;
+   inspectPage();return;
   }
   if(e.data.type==='http-status'){const nav=performance.getEntriesByType('navigation')[0];send('http-status',{url:location.href,status:nav?.name===location.href.split('#')[0]?Number(nav.responseStatus)||0:0});return;}
   if(e.data.type==='snapshot'){send('view-state',{state:{url:location.href,modal:!!document.querySelector('.fancybox-is-open,.fancybox__container,.lg-visible,dialog[open]')}});return;}

@@ -111,6 +111,15 @@ const fixture = `<!doctype html><meta charset="utf-8"><meta name="viewport" cont
     await page.keyboard.press('Escape');
    }
    await page.setViewportSize({ width: 1600, height: 1100 });
+   const guideLeft = page.locator('.guide-column').first().locator('details').last();
+   const guideRight = page.locator('.guide-column').last().locator('details').first();
+   const beforeGuideTop = await guideLeft.evaluate(el => el.getBoundingClientRect().top - el.closest('.guide-column').getBoundingClientRect().top);
+   await guideRight.evaluate(el => el.open = true);
+   assert(Math.abs(await guideLeft.evaluate(el => el.getBoundingClientRect().top - el.closest('.guide-column').getBoundingClientRect().top) - beforeGuideTop) < 1,
+    'Expanding a guide answer must not add gaps in the other column');
+   await guideRight.locator('summary').focus();
+   await page.keyboard.press('Enter');
+   assert.equal(await guideRight.evaluate(el => el.open), false);
    for (const count of ['3', '5', '4']) {
     await page.locator('#count').selectOption(count);
     await page.waitForFunction(count => document.querySelectorAll('.device-status').length === Number(count) &&

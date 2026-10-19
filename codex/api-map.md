@@ -69,3 +69,10 @@ Replay отклоняет разные URL без hash. Scroll относите�
 Контракт сообщений и protocolVersion:1 сохранены. Ответ navigate-source описывает начало перехода, а не гарантированное текущее состояние после доставки: панель повторно получает resolve-source. Loading перепроверяется раз в секунду до другого candidate/Stop; ready/route/loading desktop события используются как сигнал resolver. Iframe ping повторяется только у неподключённых карточек и отвечает прежним ready с токеном. Состояния UI partial/disconnected не являются новыми runtime-сообщениями.
 
 access-revoked: worker → panel, {panelTabId,origins,sessionRevoked}. Отправитель проверяется как остальные runtime-сообщения; sessionRevoked:true относится только к удалённой после contains(false) session. Панель инвалидирует поздние операции и iframe; false не останавливает чужой разрешённый сеанс. Сохранённая session содержит permissionMatch. События Chrome onRemoved/onAdded проходят общую serial очередь; onAdded перепроверяет watch. ProtocolVersion остаётся 1; публичной команды произвольного отзыва от content scripts нет.
+
+
+## Проверка и подсветка 2.6.17
+
+inspect-page → page-findings дополнен inspectionId (номер сканирования в текущем document), viewport:{width,height}; findings:[{id,kind,selector,label,message}], максимум 200. kind: overflow/target/text; truncated отражает лимит результатов или обхода 10 000 элементов. Панель принимает только текущий iframe/token/URL.
+
+show-finding panel → bridge: {inspectionId,url,findingId}. Проходит существующий source/origin/token/ready guard. Bridge сверяет номер последнего сканирования, точный URL и сохранённый Element.isConnected/видимость. Произвольного CSS selector в этой команде нет. Ответ finding-focused:{url,inspectionId,ok}; при false панель предлагает пересканировать. Подсветка/прокрутка не являются replay, не пересылаются другим экранам и не нажимают элементы. protocolVersion остаётся 1; старые поля findings совместимы, новая подсветка требует актуального bridge.

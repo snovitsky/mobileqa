@@ -6,7 +6,7 @@
 
 | Путь | Ответственность |
 |---|---|
-| `extension/manifest.json` | Версия 2.6.16, MV3, service worker module, действие значка, разрешения, PNG-иконки |
+| `extension/manifest.json` | Версия 2.6.17, MV3, service worker module, действие значка, разрешения, PNG-иконки |
 | `extension/background.js` | Открытие панели, подготовка сессии, очередь операций, host permissions, session DNR rules, регистрация bridge, источник и очистка |
 | `extension/panel.html` | Русский интерфейс и подключение panel.js как module |
 | `extension/panel.css` | Панель управления, карточки, оболочки устройств, масштабирование iframe, адаптация до 700 px |
@@ -51,3 +51,5 @@
 Работа только в main, отдельные клоны исполнителей, задачи и пересечения согласуются в Issue. Прямой push без force, PR не обязателен. По зафиксированным правилам workflow обязательные remote checks/review отключены владельцем; актуальные настройки GitHub отдельно не запрашивались. Локальные npm test/build по-прежнему обязательны перед push. CI создаёт ZIP artifact, соглашение релизов — теги vX.Y.Z; автоматической публикации магазина/сервера в workflow нет. Детали: [deploy.md](deploy.md).
 
 В 2.6.15 access-settings.js управляет списком Chrome host grants и явным отзывом в настройках; background onRemoved очищает лишившиеся доступа сессии/скрипты и уведомляет панель. tests/access-revocation.cjs проверяет этот цикл в изолированном VM. ZIP содержит 19 файлов, включая 11 runtime JS; npm test запускает 15 сценарных скриптов последовательно.
+
+`extension/inspection-report.js` — группировка DOM-замечаний в панели, локальный TXT и команды показа элемента; сканирование и подсветка исполняются в bridge.js.

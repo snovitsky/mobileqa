@@ -4,6 +4,7 @@ import { DEVICES, normalizeURL } from './devices.js';
 import { RESPONSIVE_DEVICE, normalizeResponsiveSize, normalizeResponsiveScale, renderResponsiveDimensions, attachResponsiveControls, updateResponsiveControls } from './responsive.js';
 import { createErrorNotice } from './error-notice.js';
 import { setupSiteAccess } from './access-settings.js';
+import { renderInspectionReport } from './inspection-report.js';
 const SCREEN_DEVICES = [...DEVICES, RESPONSIVE_DEVICE];
 const requestedSourceId = Number(new URLSearchParams(location.search).get('source'));
 let sourceTabId = Number.isSafeInteger(requestedSourceId) && requestedSourceId > 0 ? requestedSourceId : null;
@@ -229,7 +230,8 @@ window.addEventListener('message',e=>{
  if(!running||e.data?.app!=='mobile-qa-v2'||e.data.token!==token)return;
  const c=cards.find(c=>c.frame.contentWindow===e.source);if(!c)return;
  if(e.data.type==='http-status'){if(!$('check-404').checked||e.data.url!==c.pageurl.textContent)return;const el=c.article.querySelector('.http-warning');el.hidden=false;el.textContent=httpStatusMessage(e.data.status);el.classList.toggle('not-found',e.data.status===404);return;}
- if(e.data.type==='page-findings'){if(e.data.url!==c.pageurl.textContent)return;const box=c.article.querySelector('.findings');box.hidden=false;const list=box.querySelector('div');list.replaceChildren();const results=Array.isArray(e.data.findings)?e.data.findings.slice(0,80):[];box.querySelector('summary').textContent=`Вёрстка: ${results.length} замечаний`;for(const item of results){const p=document.createElement('p');p.textContent=item.message;const code=document.createElement('code');code.textContent=item.selector||'';p.append(code);list.append(p);}if(!results.length)list.textContent='По заданным правилам проблем не найдено.';if(e.data.truncated)list.append(' Показана часть результатов.');return;}
+ if(e.data.type==='page-findings'){if(e.data.url!==c.pageurl.textContent)return;renderInspectionReport(c,e.data,data=>post(c,'show-finding',data));return;}
+ if(e.data.type==='finding-focused'){if(e.data.inspectionId!==c.inspection?.id)return;c.inspection.feedback.textContent=e.data.ok?'Элемент подсвечен на экране на 4 секунды.':'Элемент изменился или больше недоступен. Запустите поиск ошибок вёрстки заново.';return;}
  if(e.data.type==='view-state'){c.view=e.data.state;c.viewAt=Date.now();return;}
  if(e.data.type==='sync-ack'){trace('applied',c,{kind:e.data.kind,sequence:e.data.eventId});return;}
  if(e.data.type==='intent'){leader=c;lastAction=Date.now();}

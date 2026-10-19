@@ -384,3 +384,21 @@ a[href]:active { color: #075675; }
 .dimensions .dimension-scale { font-weight:700; }
 .dimensions .dimension-value:hover { border-bottom-color:currentColor; background:transparent; }
 .dimensions .dimension-editor { display:inline-block; flex:none; box-sizing:content-box; font:inherit; color:inherit; background:#fff; border:0; border-bottom:1px solid currentColor; border-radius:0; min-width:0; max-width:7ch; padding:0; margin:0; line-height:inherit; vertical-align:baseline; user-select:text; }
+
+.findings .findings-content{max-height:360px;overflow:auto}
+.findings .findings-group{margin-top:10px;border-top:1px solid #d6dfe7;padding-top:10px}
+.findings .findings-group>summary{font-weight:600;cursor:pointer}
+.findings .finding-row{padding:10px 0;border-bottom:1px solid #e5eaf0}
+.findings .finding-row p,.findings .findings-context,.findings .findings-note,.findings .findings-feedback{margin:6px 0;padding:0;border:0}
+.findings .finding-show{text-align:left;white-space:normal;color:#08658b;background:#edf7fc;border-color:#bcd8e5;max-width:100%}
+.findings .finding-technical{margin-top:6px;color:#526579}
+.findings .finding-technical summary{cursor:pointer}
+.findings .findings-feedback{color:#865a12}
+
+.usage-guide .guide-intro{margin:0 0 20px;max-width:850px;font-size:13px;line-height:1.7;color:#526579}
+.guide-details>details{min-width:0}
+.guide-details strong{color:#334e68}
+
+.guide-details{align-items:start}
+.guide-column{min-width:0;display:flex;flex-direction:column;gap:18px}
+.guide-column>details{min-width:0}
