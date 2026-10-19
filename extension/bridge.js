@@ -33,16 +33,52 @@
    const name={button:'Кнопка',a:'Ссылка',input:'Поле',textarea:'Поле',select:'Список',img:'Изображение',html:'Страница'}[tag]||'Элемент '+tag;
    inspectionElements.set(id,el);findings.push({id,kind,selector:path(el),label:text?`${name} «${text}»`:name,message});
   };
-  const root=document.documentElement;
-  if(root.scrollWidth>innerWidth+2)add('overflow',root,`Страница шире экрана на ${root.scrollWidth-innerWidth} CSS px. Проверьте, нужна ли горизонтальная прокрутка.`);
+  const root=document.documentElement,geometry=new Map(),overflow=new Map(),otherFindings=[];
+  const defer=(kind,el,message)=>{if(otherFindings.length<200)otherFindings.push({kind,el,message});else omitted=true;};
+  // Не ограничиваем проверку высотой окна: содержимое ниже первого экрана тоже проверяется.
+  // Зато учитываем реальную обрезку/прокрутку предков, независимо от библиотеки слайдера.
+  const measure=el=>{
+   if(geometry.has(el))return geometry.get(el);
+   const r=el.getBoundingClientRect(),style=getComputedStyle(el),parent=el.parentElement;
+   const inherited=parent&&parent!==root?measure(parent):null;
+   const clip={left:inherited?.clip.left??-Infinity,right:inherited?.clip.right??Infinity,top:inherited?.clip.top??-Infinity,bottom:inherited?.clip.bottom??Infinity};
+   const hidden=style.display==='none'||style.visibility==='hidden'||Number(style.opacity)===0||el.getAttribute('aria-hidden')==='true'||!!inherited?.hidden;
+   const bounds={left:Math.max(r.left,clip.left),right:Math.min(r.right,clip.right),top:Math.max(r.top,clip.top),bottom:Math.min(r.bottom,clip.bottom)};
+   const paint=/(paint|strict|content)/.test(style.contain);
+   const scaleX=el.offsetWidth?r.width/el.offsetWidth:1,scaleY=el.offsetHeight?r.height/el.offsetHeight:1;
+   if(el!==document.body){
+    if(paint||/^(hidden|clip|auto|scroll)$/.test(style.overflowX)){clip.left=Math.max(clip.left,r.left+el.clientLeft*scaleX);clip.right=Math.min(clip.right,r.left+(el.clientLeft+el.clientWidth)*scaleX);}
+    if(paint||/^(hidden|clip|auto|scroll)$/.test(style.overflowY)){clip.top=Math.max(clip.top,r.top+el.clientTop*scaleY);clip.bottom=Math.min(clip.bottom,r.top+(el.clientTop+el.clientHeight)*scaleY);}
+   }
+   const fixed=style.position==='fixed'||!!inherited?.fixed;
+   const result={r,style,bounds,clip,hidden,fixed};geometry.set(el,result);return result;
+  };
   let visited=0;for(const el of document.querySelectorAll('body *')){
    if(++visited>10000)break;
-   const r=el.getBoundingClientRect(),style=getComputedStyle(el);
-   if(!r.width||!r.height||style.visibility==='hidden'||style.display==='none'||el.closest('[aria-hidden="true"]'))continue;
-   if(r.right>innerWidth+2&&r.left>=0&&style.position!=='fixed')add('overflow',el,'Элемент выходит за правый край экрана. Проверьте, доступно ли его содержимое.');
-   if(el.matches('button,a[href],input:not([type=hidden]),select,textarea,[role=button]')&&(r.width<24||r.height<24))add('target',el,`Маленькая область нажатия: ${Math.round(r.width)} × ${Math.round(r.height)} CSS px, одна из сторон меньше 24. Проверьте, удобно ли нажимать пальцем.`);
-   if([...el.childNodes].some(n=>n.nodeType===3&&n.textContent.trim())&&parseFloat(style.fontSize)<12)add('text',el,`Мелкий текст: ${style.fontSize}, меньше 12 px. Проверьте, удобно ли его читать.`);
+   const {r,style,bounds,hidden,fixed}=measure(el);
+   if(hidden||bounds.right<=bounds.left||bounds.bottom<=bounds.top)continue;
+   // Служебная проверка Botfaqtor намеренно вынесена далеко за страницу.
+   // Сам id не является исключением: видимые и пользовательские iframe проверяются.
+   if(el.localName==='iframe'&&el.id==='ab'&&['absolute','fixed'].includes(style.position)&&r.right+(fixed?0:scrollX)<-1000&&r.bottom+(fixed?0:scrollY)<-1000){
+    try{if(new URL(el.src,location.href).hostname==='checks.botfaqtor.ru')continue;}catch{}
+   }
+   const offset=fixed?0:scrollX,left=bounds.left+offset<-2,right=bounds.right+offset>innerWidth+2;
+   if(left||right){
+    let owner;for(let p=el.parentElement;p;p=p.parentElement){const candidate=overflow.get(p);if(candidate&&(!left||candidate.left<=bounds.left+2)&&(!right||candidate.right>=bounds.right-2)){owner=candidate;break;}}
+    if(owner)owner.related++;
+    else {
+     const excess=[left?`слева на ${Math.ceil(-bounds.left-offset)} CSS px`:'',right?`справа на ${Math.ceil(bounds.right+offset-innerWidth)} CSS px`:''].filter(Boolean).join(', ');
+     overflow.set(el,{left:bounds.left,right:bounds.right,related:0,message:`Элемент выходит за ${left&&right?'левый и правый края':left?'левый край':'правый край'} экрана: ${excess}. Ширина экрана — ${innerWidth} CSS px. Проверьте, доступно ли его содержимое.`});
+    }
+   }
+   if(bounds.right<=0||bounds.left>=innerWidth)continue;
+   if(el.matches('button,a[href],input:not([type=hidden]),select,textarea,[role=button]')&&(r.width<24||r.height<24))defer('target',el,`Маленькая область нажатия: ${Math.round(r.width)} × ${Math.round(r.height)} CSS px, одна из сторон меньше 24. Проверьте, удобно ли нажимать пальцем.`);
+   if([...el.childNodes].some(n=>n.nodeType===3&&n.textContent.trim())&&parseFloat(style.fontSize)<12)defer('text',el,`Мелкий текст: ${style.fontSize}, меньше 12 px. Проверьте, удобно ли его читать.`);
   }
+  // Сначала выделяем причины переполнения: сотня мелких надписей не должна вытеснить их из лимита.
+  for(const [el,item] of overflow){const count=findings.length;add('overflow',el,item.message);if(findings.length>count&&item.related)findings.at(-1).relatedCount=item.related;}
+  if(!overflow.size&&root.scrollWidth>innerWidth+2)add('overflow',root,`Страница шире экрана на ${root.scrollWidth-innerWidth} CSS px. Источник не определён; проверьте горизонтальную прокрутку и псевдоэлементы.`);
+  for(const item of otherFindings)add(item.kind,item.el,item.message);
   send('page-findings',{url:inspectionURL,inspectionId,viewport:{width:innerWidth,height:innerHeight},findings,truncated:omitted||visited>10000});
  }
  function showInspectionFinding(data){

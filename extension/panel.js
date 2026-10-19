@@ -51,7 +51,14 @@ function updateSessionControls(){
  $('status').dataset.state=applicationState;
  $('status').classList.toggle('error',applicationState==='error');
  $('status').title=applicationLabel+'. '+$('status').textContent;
- $('start').title=active?'Работает. Повторно открыть адрес на экранах':'Показать сайт на всех экранах';
+ const refresh=running&&!stoppedByUser,startButton=$('start'),icon=startButton.querySelector('path');
+ startButton.dataset.mode=refresh?'refresh':'play';
+ startButton.title=refresh?'Обновить макеты по указанному адресу':'Показать сайт на всех экранах';
+ startButton.setAttribute('aria-label',startButton.title);
+ icon.setAttribute('d',refresh?'M16 7a6 6 0 1 0 .1 5M16 3v4h-4':'M6 3 17 10 6 17Z');
+ icon.setAttribute('fill',refresh?'none':'currentColor');
+ icon.setAttribute('stroke',refresh?'currentColor':'none');
+ icon.setAttribute('stroke-width','1.8');icon.setAttribute('stroke-linecap','round');icon.setAttribute('stroke-linejoin','round');
  $('stop').title=active||pending?'Остановить сеанс и закрыть страницы во встроенных экранах':'Проверка остановлена';
 }
 function status(text,error=false,severity='error'){if(error){$('error-notice').dataset.severity=severity;$('sync-feedback').setAttribute('role',severity==='warning'?'status':'alert');errorNotice.show(text);}else errorNotice.clear();$('status').textContent=text;updateSessionControls();}
@@ -150,6 +157,16 @@ function resize() {
    ? (mode === 'expanded' ? (card.landscape ? 44 : se ? 94 : 118) : (se ? 0 : 34))
    : (d.id === 'galaxya12' ? 36 : 24);
   const viewportHeight = h - bar - top - bottom;
+  const inspectionContext = `${d.id}:${w}:${viewportHeight}`;
+  if (card.inspectionContext !== inspectionContext) {
+   card.inspectionContext = inspectionContext;
+   card.inspection = null;
+   card.article.querySelector('.findings').hidden = true;
+   clearTimeout(card.inspectionTimer);
+   if (auditing) card.inspectionTimer = setTimeout(() => {
+    if (running && card.ready && cards.includes(card)) post(card, 'inspect-page');
+   }, 300);
+  }
   card.article.dataset.browserMode = mode;
   card.article.style.setProperty('--browser-top-height', top + 'px');
   card.article.style.setProperty('--browser-bottom-height', bottom + 'px');
@@ -216,6 +233,7 @@ function loading(c){
  c.timeout=setTimeout(()=>{if(!c.ready){c.connectionFailed=true;c.placeholder.hidden=false;c.placeholder.textContent='Страница пока не подключилась. Дождитесь загрузки или нажмите «▶» ещё раз. Если сайт открывается в обычной вкладке, проверьте «Разрешить встраивание» в настройках.';c.state.textContent='Нет подключения';status('Один из экранов пока не подключился. Подождите или нажмите «▶» ещё раз; подробности указаны в самом экране.',true);}},12000);
 }
 function setURL(c,url){
+ clearTimeout(c.inspectionTimer);c.inspection=null;
  c.pending=[];c.article.querySelector('.http-warning').hidden=true;c.article.querySelector('.findings').hidden=true;
  url=normalizeURL(url);clearTimeout(c.timeout);c.ready=false;c.connectionFailed=false;c.view=null;c.divergence=0;c.state.textContent='Загрузка';c.placeholder.textContent='Загружаем страницу…';c.placeholder.hidden=false;updateSessionControls();
  // Set the remote source before inserting: no privileged about:blank with script+origin flags.
@@ -252,7 +270,7 @@ window.addEventListener('message',e=>{
  if(!running||e.data?.app!=='mobile-qa-v2'||e.data.token!==token)return;
  const c=cards.find(c=>c.frame.contentWindow===e.source);if(!c)return;
  if(e.data.type==='http-status'){if(!$('check-404').checked||e.data.url!==c.pageurl.textContent)return;const el=c.article.querySelector('.http-warning');el.hidden=false;el.textContent=httpStatusMessage(e.data.status);el.classList.toggle('not-found',e.data.status===404);return;}
- if(e.data.type==='page-findings'){if(e.data.url!==c.pageurl.textContent)return;renderInspectionReport(c,e.data,data=>post(c,'show-finding',data));return;}
+ if(e.data.type==='page-findings'){if(e.data.url!==c.pageurl.textContent||e.data.viewport?.width!==parseInt(c.frame.style.width)||e.data.viewport?.height!==parseInt(c.frame.style.height))return;renderInspectionReport(c,e.data,data=>post(c,'show-finding',data));return;}
  if(e.data.type==='finding-focused'){if(e.data.inspectionId!==c.inspection?.id)return;c.inspection.feedback.textContent=e.data.ok?'Элемент подсвечен на экране на 4 секунды.':'Элемент изменился или больше недоступен. Запустите поиск ошибок вёрстки заново.';return;}
  if(e.data.type==='view-state'){c.view=e.data.state;c.viewAt=Date.now();return;}
  if(e.data.type==='sync-ack'){trace('applied',c,{kind:e.data.kind,sequence:e.data.eventId});return;}
