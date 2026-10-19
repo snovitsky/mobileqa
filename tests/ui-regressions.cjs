@@ -1,4 +1,5 @@
 const { chromium } = require('playwright');
+const { expect } = require('playwright/test');
 const http = require('node:http');
 const fs = require('node:fs');
 const os = require('node:os');
@@ -152,19 +153,25 @@ const fixture = `<!doctype html><meta charset="utf-8"><meta name="viewport" cont
    async function checkFocus(selector) {
     const control = page.locator(selector).first();
     await control.focus();
+    await expect(control).toBeFocused();
     await page.keyboard.press('Tab');
     await page.keyboard.press('Shift+Tab');
-    assert(await control.evaluate(el => {
+    await expect.poll(() => control.evaluate(el => {
      const style = getComputedStyle(el);
-     return document.activeElement === el && el.matches(':focus-visible') &&
-      parseFloat(style.outlineWidth) > 0 && parseFloat(style.outlineWidth) <= 2 &&
-      parseFloat(style.outlineOffset) <= 0 && style.outlineColor !== 'rgb(73, 169, 130)';
-    }), `Noncompact/missing keyboard focus: ${selector}`);
+     return {focused: document.activeElement === el, focusVisible: el.matches(':focus-visible'),
+      compact: parseFloat(style.outlineWidth) > 0 && parseFloat(style.outlineWidth) <= 2 &&
+       parseFloat(style.outlineOffset) <= 0 && style.outlineColor !== 'rgb(73, 169, 130)',
+      outlineWidth: style.outlineWidth, outlineOffset: style.outlineOffset, outlineColor: style.outlineColor,
+      activeTag: document.activeElement?.tagName, activeId: document.activeElement?.id};
+    }), {message: `Noncompact/missing keyboard focus: ${selector}, DPR ${dpr}`, timeout: 5000})
+     .toMatchObject({focused: true, focusVisible: true, compact: true});
    }
    await checkFocus('#calibration-method');
    await checkFocus('#measurement-width');
    await checkFocus('#calibration-save');
    await page.locator('#calibration-cancel').click();
+   await page.waitForFunction(() => !document.querySelector('#calibration-dialog').open);
+   await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
    await checkFocus('.device select');
    await checkFocus('.device [data-action=rotate]');
    await checkFocus('#url');
